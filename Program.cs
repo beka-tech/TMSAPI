@@ -1,13 +1,20 @@
 
+using Microsoft.AspNetCore.Authentication;
+
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers();
 
 // builder.Services.AddAuthentication();
-builder.Services.AddAuthentication("Bearer")
-    .AddJwtBearer();
+// builder.Services.AddAuthentication("Bearer")
+//     .AddJwtBearer();
 
-// builder.Services.AddAuthentication();
+builder.Services
+.AddAuthentication("Training")
+.AddScheme<AuthenticationSchemeOptions,
+TrainingAuthHandler>("Training", null);
+
+
 
 builder.Services.AddAuthorization();
 
