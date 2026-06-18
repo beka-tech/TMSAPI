@@ -1,6 +1,8 @@
 using System.Collections.Generic;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using TMSAPI.Data;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -39,6 +41,15 @@ builder.Services.AddProblemDetails();
 // ============================================
 // EXERCISE 3: Options Pattern with Startup Validation
 // ============================================
+
+// ============================================
+// EXERCISE 6: Register the DbContext
+// ============================================
+
+builder.Services.AddDbContext<TmsDbContext>(options =>
+    options.UseNpgsql(builder.Configuration.GetConnectionString("TmsDatabase"))
+);
+
 builder
     .Services.AddOptions<PaymentOptions>()
     .BindConfiguration("Payments")
