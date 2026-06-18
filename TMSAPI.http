@@ -8,17 +8,16 @@ GET {{TMSAPI_HostAddress}}/api/assessments/results/
 ### Expected: 200 OK with empty array [] (no enrollments yet)
 GET  http://localhost:5150/api/enrollments
 
-### 3. GET /api/enrollments/{id} - Testing with fake ID
-### Expected: 404 Not Found (enrollment doesn't exist)
-GET  http://localhost:5150/api/enrollments/fake-id-12345
 
-###
-GET  http://localhost:5150/api/enrollments/worker-smoke
 
 # GET {{TMSAPI_HostAddress}}/api
 # GET {{TMSAPI_HostAddress}}
 Accept: application/json
 
 
-
 ###
+GET  http://localhost:5150/api/enrollments/46135946
+
+# POST http://localhost:5150/api/enrollments/
+# GET http://localhost:5150/api/enrollments
+# GET http://localhost:5150/api/enrollments/0ec9d453  getbyId 
