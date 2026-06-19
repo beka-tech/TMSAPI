@@ -28,7 +28,6 @@ builder
 // Singleton worker is okay because it should use IServiceScopeFactory internally.
 builder.Services.AddSingleton<EnrollmentWorker>();
 
-// This should be scoped, not singleton.
 builder.Services.AddSingleton<IEnrollmentService, EnrollmentService>();
 
 builder.Services.AddAuthorization();
@@ -50,6 +49,9 @@ builder.Services.AddDbContext<TmsDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("TmsDatabase"))
 );
 
+// ============================================
+// EXERCISE 3: Options Pattern with Startup Validation
+// ============================================
 builder
     .Services.AddOptions<PaymentOptions>()
     .BindConfiguration("Payments")
