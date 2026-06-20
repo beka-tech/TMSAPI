@@ -14,4 +14,5 @@ public class Student
 
     // Navigation property for many-to-many relationship
     public ICollection<Enrollment> Enrollments { get; set; } = new List<Enrollment>();
+    public ICollection<Certificate> Certificates { get; set; } = new List<Certificate>();
 }
