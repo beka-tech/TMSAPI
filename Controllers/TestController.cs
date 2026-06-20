@@ -1,7 +1,9 @@
 using System;
 using System.Linq;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using TMSAPI.Data;
+using TMSAPI.Entities;
 
 namespace TMSAPI.Controllers;
 
@@ -53,13 +55,80 @@ public class TestController(TmsDbContext context) : ControllerBase
     }
 
     [HttpGet("activestudent")]
-    public IActionResult ActiveStudents()
+    public async Task<IActionResult> ActiveStudents()
     {
         Console.WriteLine("\n>>> STEP 1: Running non-translatable query...");
         try
         {
-            var count = context.Students.Where(s => s.IsActive && s.GPA >= 3.0m).ToList();
+            var count = await context
+                .Students.Where(s => s.IsActive && s.GPA >= 3.0m)
+                .ToListAsync();
             return Ok(count);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($">>> EXCEPTION CAUGHT: {ex.Message}\n");
+            return BadRequest(new { Message = ex.Message });
+        }
+    }
+
+    [HttpGet("enrollmentCount")]
+    public async Task<IActionResult> EnrollmentCount()
+    {
+        Console.WriteLine("\n>>> STEP 1: Running non-translatable query...");
+        try
+        {
+            var lsit = await context
+                .Courses.Select(c => new { c.Title, EnrollmentCount = c.Enrollments.Count })
+                .OrderByDescending(x => x.EnrollmentCount)
+                .ToListAsync();
+            return Ok(lsit);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($">>> EXCEPTION CAUGHT: {ex.Message}\n");
+            return BadRequest(new { Message = ex.Message });
+        }
+    }
+
+    [HttpGet("averageGpa")]
+    public async Task<IActionResult> AverageGPA()
+    {
+        Console.WriteLine("\n>>> STEP 1: Running non-translatable query...");
+        try
+        {
+            var list = await context
+                .Enrollments.GroupBy(e => e.course.Title)
+                .Select(g => new
+                {
+                    Course = g.Key,
+                    AverageGPA = Math.Round(
+                        g.Average(e => e.student.GPA),
+                        1,
+                        MidpointRounding.AwayFromZero
+                    ),
+                })
+                .ToListAsync();
+            return Ok(list);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($">>> EXCEPTION CAUGHT: {ex.Message}\n");
+            return BadRequest(new { Message = ex.Message });
+        }
+    }
+
+    [HttpGet("unenrolled")]
+    public async Task<IActionResult> Unenrolledstudents()
+    {
+        Console.WriteLine("\n>>> STEP 1: Running non-translatable query...");
+        try
+        {
+            var list = await context
+                .Students.Where(s => !s.Enrollments.Any())
+                .Select(s => $" {s.Name} {s.GPA} ")
+                .ToListAsync();
+            return Ok(list);
         }
         catch (Exception ex)
         {
