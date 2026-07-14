@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using TMSAPI.Data;
@@ -11,9 +12,11 @@ using TMSAPI.Data;
 namespace TMSAPI.Migrations
 {
     [DbContext(typeof(TmsDbContext))]
-    partial class TmsDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260705091735_AddStudentLastUpdated")]
+    partial class AddStudentLastUpdated
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -88,12 +91,12 @@ namespace TMSAPI.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
+                    b.Property<int>("Capacity")
+                        .HasColumnType("integer");
+
                     b.Property<string>("Code")
                         .IsRequired()
                         .HasColumnType("text");
-
-                    b.Property<int>("MaxCapacity")
-                        .HasColumnType("integer");
 
                     b.Property<string>("Title")
                         .IsRequired()
@@ -147,9 +150,6 @@ namespace TMSAPI.Migrations
                     b.Property<bool>("IsActive")
                         .HasColumnType("boolean");
 
-                    b.Property<bool>("IsDeleted")
-                        .HasColumnType("boolean");
-
                     b.Property<DateTime>("LastUpdated")
                         .IsConcurrencyToken()
                         .ValueGeneratedOnAdd()
@@ -172,7 +172,7 @@ namespace TMSAPI.Migrations
             modelBuilder.Entity("TMSAPI.Entities.Assessment", b =>
                 {
                     b.HasOne("TMSAPI.Entities.Course", "Course")
-                        .WithMany()
+                        .WithMany("Assessments")
                         .HasForeignKey("CourseId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
@@ -201,25 +201,27 @@ namespace TMSAPI.Migrations
 
             modelBuilder.Entity("TMSAPI.Entities.Enrollment", b =>
                 {
-                    b.HasOne("TMSAPI.Entities.Course", "Course")
+                    b.HasOne("TMSAPI.Entities.Course", "course")
                         .WithMany("Enrollments")
                         .HasForeignKey("CourseId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("TMSAPI.Entities.Student", "Student")
+                    b.HasOne("TMSAPI.Entities.Student", "student")
                         .WithMany("Enrollments")
                         .HasForeignKey("StudentId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.Navigation("Course");
+                    b.Navigation("course");
 
-                    b.Navigation("Student");
+                    b.Navigation("student");
                 });
 
             modelBuilder.Entity("TMSAPI.Entities.Course", b =>
                 {
+                    b.Navigation("Assessments");
+
                     b.Navigation("Enrollments");
                 });
 

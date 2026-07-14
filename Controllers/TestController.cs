@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;
 using TMSAPI.Data;
 using TMSAPI.Entities;
@@ -34,8 +35,6 @@ public class TestController(TmsDbContext context) : ControllerBase
     ///EF Core tries to convert your LINQ query into SQL,
     /// but it does not know how to convert your custom C# method:
     /// </summary>
-    /// <returns>
-    /// </returns>
     [HttpGet("translation-fail")]
     public IActionResult TestTranslationFail()
     {
@@ -98,12 +97,12 @@ public class TestController(TmsDbContext context) : ControllerBase
         try
         {
             var list = await context
-                .Enrollments.GroupBy(e => e.course.Title)
+                .Enrollments.GroupBy(e => e.Course.Title)
                 .Select(g => new
                 {
                     Course = g.Key,
                     AverageGPA = Math.Round(
-                        g.Average(e => e.student.GPA),
+                        g.Average(e => e.Student.GPA),
                         1,
                         MidpointRounding.AwayFromZero
                     ),
@@ -135,5 +134,17 @@ public class TestController(TmsDbContext context) : ControllerBase
             Console.WriteLine($">>> EXCEPTION CAUGHT: {ex.Message}\n");
             return BadRequest(new { Message = ex.Message });
         }
+    }
+
+    [HttpGet("getstudent")]
+    public async Task<IActionResult> GetStudent(int pageNumber = 1, int pageSize = 10)
+    {
+        var students = await context
+            .Students.OrderBy(s => s.Name)
+            .Skip((pageNumber - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync();
+
+        return Ok(students);
     }
 }

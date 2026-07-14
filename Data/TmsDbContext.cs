@@ -11,4 +11,20 @@ public class TmsDbContext(DbContextOptions<TmsDbContext> options) : DbContext(op
     public DbSet<Assessment> Assessments => Set<Assessment>();
 
     public DbSet<Certificate> certificates => Set<Certificate>();
+
+    // protected override void OnModelCreating(ModelBuilder modelBuilder)
+    // {
+    //     modelBuilder.ApplyConfigurationsFromAssembly(typeof(TmsDbContext).Assembly);
+    // }
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        modelBuilder
+            .Entity<Student>()
+            .Property<DateTime>("LastUpdated")
+            .HasColumnType("timestamp without time zone")
+            .HasDefaultValueSql("CURRENT_TIMESTAMP")
+            .IsConcurrencyToken();
+        base.OnModelCreating(modelBuilder);
+    }
 }

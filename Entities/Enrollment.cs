@@ -12,6 +12,6 @@ public class Enrollment
     public DateTime EnrolledAt { get; set; } = DateTime.UtcNow;
 
     // Navigation Properties back to entities
-    public Student student { get; set; } = null!;
-    public Course course { get; set; } = null!;
+    public Student Student { get; set; } = null!;
+    public Course Course { get; set; } = null!;
 }
