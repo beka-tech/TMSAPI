@@ -19,6 +19,18 @@ public class CourseControllers(ICourseService courseService) : ControllerBase
     [HttpPost]
     public async Task<IActionResult> CreateCourse(CreateCourseRequest request, CancellationToken ct)
     {
+        if (await courseService.CodeExistsAsync(request.Code, ct))
+        {
+            return Conflict(
+                new ProblemDetails
+                {
+                    Title = "Course code already exitst",
+                    Detail = $"A course with code '{request.Code}' is already registered.",
+                    Status = StatusCodes.Status409Conflict,
+                }
+            );
+        }
+
         var result = await courseService.CreateAsync(request, ct);
         return CreatedAtAction(nameof(GetCourseById), new { id = result.Id }, result);
     }
