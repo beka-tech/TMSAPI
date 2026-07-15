@@ -29,10 +29,11 @@ builder
 // EXERCISE 2: Service Registration
 // ============================================
 // Singleton worker is okay because it should use IServiceScopeFactory internally.
-builder.Services.AddSingleton<EnrollmentWorker>();
+// builder.Services.AddSingleton<EnrollmentWorker>();
 
 builder.Services.AddScoped<IEnrollmentService, EnrollmentService>();
 
+// builder.Services.AddScoped<IEnrollmentService, >
 builder.Services.AddScoped<IStudentService, StudentService>();
 builder.Services.AddScoped<ICourseService, CourseService>();
 
@@ -119,13 +120,13 @@ app.MapGet(
     )
     .RequireAuthorization();
 
-app.MapGet(
-    "/api/error",
-    () =>
-    {
-        throw new TmsDatabaseException("Simulated database failure for ProblemDetails testing");
-    }
-);
+// app.MapGet(
+//     "/api/error",
+//     () =>
+//     {
+//         throw new TmsDatabaseException("Simulated database failure for ProblemDetails testing");
+//     }
+// );
 
 app.MapControllers();
 
