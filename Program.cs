@@ -5,6 +5,7 @@ using Microsoft.Extensions.Options;
 using Scalar.AspNetCore;
 using TMSAPI.Data;
 using TMSAPI.Entities;
+using TMSAPI.Filters;
 using TMSAPI.Services;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -18,7 +19,11 @@ builder.Host.UseDefaultServiceProvider(options =>
     options.ValidateOnBuild = true;
 });
 
-builder.Services.AddControllers();
+// builder.Services.AddControllers();
+builder.Services.AddControllers(options =>
+{
+    options.Filters.Add<AuditLogFilter>();
+});
 
 // Authentication setup
 builder
