@@ -1,3 +1,4 @@
+using Asp.Versioning;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.EntityFrameworkCore;
 using Scalar.AspNetCore;
@@ -47,6 +48,38 @@ builder.Services.AddAuthorization();
 
 builder.Services.AddOpenApi(); // Required before MapOpenApi() will work
 
+builder.Services.AddOpenApi(
+    "v1",
+    options =>
+    {
+        options.ShouldInclude = description => description.GroupName == "v1";
+    }
+);
+builder.Services.AddOpenApi(
+    "v2",
+    options =>
+    {
+        options.ShouldInclude = description => description.GroupName == "v2";
+    }
+);
+builder
+    .Services.AddApiVersioning(options =>
+    {
+        options.DefaultApiVersion = new ApiVersion(1, 0);
+        options.AssumeDefaultVersionWhenUnspecified = true;
+        options.ReportApiVersions = true;
+        options.ApiVersionReader = new UrlSegmentApiVersionReader();
+        options.ApiVersionReader = ApiVersionReader.Combine(
+            new UrlSegmentApiVersionReader(),
+            new HeaderApiVersionReader("X-Api-Version")
+        );
+    })
+    .AddApiExplorer(options =>
+    {
+        options.GroupNameFormat = "'v'VVV";
+        options.SubstituteApiVersionInUrl = true;
+    });
+
 // ============================================
 // EXERCISE 6: ProblemDetails
 // ============================================
@@ -55,10 +88,6 @@ builder.Services.AddProblemDetails();
 // ============================================
 // M4 EXERCISE 6: Register the DbContext
 // ============================================
-
-// builder.Services.AddDbContext<TmsDbContext>(options =>
-//     options.UseNpgsql(builder.Configuration.GetConnectionString("TmsDatabase"))
-// );
 
 // ============================================
 // M5 EXERCISE 2: Enable Console SQL Logging
@@ -85,7 +114,17 @@ var app = builder.Build();
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
-    app.MapScalarApiReference();
+    // app.MapScalarApiReference();
+    app.MapScalarApiReference(options =>
+    {
+        options
+            .WithTitle("TMS API Reference")
+            .WithTheme(ScalarTheme.DeepSpace)
+            .WithDefaultHttpClient(ScalarTarget.CSharp, ScalarClient.HttpClient)
+            // Tell Scalar to pull both documents into its sidebar dropdownoptions
+            .AddDocument("v1", "API Version 1.0")
+            .AddDocument("v2", "API Version 2.0");
+    });
 
     app.UseDeveloperExceptionPage();
 }
@@ -107,6 +146,8 @@ app.UseRouting();
 
 app.UseAuthentication();
 app.UseAuthorization();
+
+app.UseMiddleware<V1DeprecationMiddleware>();
 
 // ============================================
 // Endpoints
