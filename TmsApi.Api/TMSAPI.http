@@ -21,3 +21,7 @@ GET  http://localhost:5150/api/enrollments/46135946
 # POST http://localhost:5150/api/enrollments/
 # GET http://localhost:5150/api/enrollments
 # GET http://localhost:5150/api/enrollments/0ec9d453  getbyId 
+
+curl -i -X POST https://localhost:5150/api/v2/enrollments \
+-H "Content-Type: application/json" \
+-d '{"studentId": 1, "courseCode": "CSE-101"}'

@@ -1,4 +1,3 @@
-// namespace TMSAPI.Dtos;
 namespace TmsApi.Application.DTOs;
 
 public record CourseResponseDto(

@@ -1,9 +1,3 @@
-// using Microsoft.EntityFrameworkCore;
-// using TMSAPI.Data;
-// // using TMSAPI.Entities;
-// using TmsApi.Domain.Entities;
-// using TMSAPI.Dtos;
-
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using TmsApi.Application.DTOs;
@@ -98,6 +92,13 @@ public class CourseService(TmsDbContext context, ILogger<CourseService> logger) 
                 c.Enrollments.Count
             ))
             .FirstOrDefaultAsync(ct);
+    }
+
+    public Task<Course?> GetByCodeAsync(string code, CancellationToken ct)
+    {
+        return context
+            .Courses.Include(c => c.Enrollments)
+            .FirstOrDefaultAsync(c => c.Code == code, ct);
     }
 
     public async Task<CourseResponseDto> CreateAsync(
