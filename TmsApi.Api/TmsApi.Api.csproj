@@ -22,6 +22,8 @@
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
 
+    <PackageReference Include="Microsoft.Extensions.Caching.Hybrid" Version="10.8.0" />
+
     <PackageReference Include="Scalar.AspNetCore" Version="2.16.4" />
   </ItemGroup>
 
