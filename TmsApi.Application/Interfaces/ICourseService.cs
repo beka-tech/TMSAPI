@@ -15,4 +15,6 @@ public interface ICourseService
         CancellationToken ct
     );
     Task<Course?> GetByCodeAsync(string code, CancellationToken ct);
+    Task<List<Course>> GetAllAsync(CancellationToken ct);
+    Task<Course> UpdateAsync(Course course, CancellationToken ct);
 }

@@ -119,6 +119,24 @@ public class CourseService(TmsDbContext context, ILogger<CourseService> logger) 
         return (await GetByIdAsync(course.Id, ct))!;
     }
 
+    public async Task<Course?> UpdateAsync(Course course, CancellationToken ct)
+    {
+        context.Courses.Update(course);
+        await context.SaveChangesAsync(ct);
+
+        logger.LogInformation("Updated course {CourseId} ({CourseCode})", course.Id, course.Code);
+
+        return course;
+    }
+
     public Task<bool> CodeExistsAsync(string code, CancellationToken ct) =>
         context.Courses.AsNoTracking().AnyAsync(c => c.Code == code, ct);
+
+    public async Task<List<Course>> GetAllAsync(CancellationToken ct)
+    {
+        return await context
+            .Courses.AsNoTracking()
+            .Include(course => course.Enrollments)
+            .ToListAsync(ct);
+    }
 }

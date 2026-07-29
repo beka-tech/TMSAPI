@@ -32,40 +32,36 @@ public class CourseControllers(ICourseService courseService, LinkGenerator linkG
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     [EndpointSummary("Get a course by ID")]
     [EndpointDescription(
-        "Returns course details with HATEOAS links.Returns 404 if the course does not exist."
+        "Returns course details with HATEOAS links. Returns 404 if the course does not exist."
     )]
     public async Task<IActionResult> GetCourseById(int id, CancellationToken ct)
     {
         var course = await courseService.GetByIdAsync(id, ct);
+
         if (course is null)
             return NotFound();
 
-        var selfHref = linkGenerator.GetPathByName(HttpContext, nameof(GetCourseById), new { id });
-        var enrollmentsHref = linkGenerator.GetPathByName(
+        var selfPath = linkGenerator.GetPathByName(HttpContext, nameof(GetCourseById), new { id })!;
+        var enrollmentsPath = linkGenerator.GetPathByName(
             HttpContext,
             "ListCourseEnrollments",
             new { courseId = id }
-        );
-
-        if (selfHref is null || enrollmentsHref is null)
-            throw new InvalidOperationException(
-                "Route resolution failed — check route names against LinkGenerator calls."
-            );
+        )!;
 
         var links = new List<LinkDto>
         {
-            new(selfHref, "self", "GET"),
-            new(selfHref, "update", "PUT"),
-            new(selfHref, "delete", "DELETE"),
-            new(enrollmentsHref, "enrollments", "GET"),
+            new(selfPath, "self", "GET"),
+            new(selfPath, "update", "PUT"),
+            new(selfPath, "delete", "DELETE"),
+            new(enrollmentsPath, "enrollments", "GET"),
         };
 
         if (course.EnrollmentCount < course.MaxCapacity)
         {
-            links.Add(new LinkDto(enrollmentsHref, "enroll", "POST"));
+            links.Add(new LinkDto(enrollmentsPath, "enroll", "POST"));
         }
 
-        var detailDto = new CourseDetailDto
+        var detail = new CourseDetailDto
         {
             Id = course.Id,
             Code = course.Code,
@@ -75,7 +71,7 @@ public class CourseControllers(ICourseService courseService, LinkGenerator linkG
             Links = links,
         };
 
-        return Ok(detailDto);
+        return Ok(detail);
     }
 
     [HttpPost]

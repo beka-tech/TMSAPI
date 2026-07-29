@@ -3,6 +3,7 @@ using FluentValidation;
 using MediatR;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Hybrid;
 using Scalar.AspNetCore;
 using TmsApi.Api.Authentication;
 using TmsApi.Api.ExceptionHandlers;
@@ -25,6 +26,14 @@ builder.Host.UseDefaultServiceProvider(options =>
     options.ValidateScopes = true;
     options.ValidateOnBuild = true;
 });
+
+// Production-only leave commented in lab
+// builder.Services.AddStackExchangeRedisCache(options =>
+// {
+// options.Configuration = builder.Configuration.GetConnectionString("Redis");
+// options.InstanceName = "tms:";
+// });
+// builder.Services.AddHybridCache();
 
 builder.Services.AddMediatR(cfg =>
     cfg.RegisterServicesFromAssembly(typeof(EnrollStudentHandler).Assembly)
@@ -59,6 +68,7 @@ builder.Services.AddScoped<IEnrollmentService, EnrollmentService>();
 // builder.Services.AddScoped<IEnrollmentService, >
 builder.Services.AddScoped<IStudentService, StudentService>();
 builder.Services.AddScoped<ICourseService, CourseService>();
+builder.Services.AddScoped<ICachedCourseService, CachedCourseService>();
 
 builder.Services.AddAuthorization();
 
@@ -95,6 +105,15 @@ builder
         options.GroupNameFormat = "'v'VVV";
         options.SubstituteApiVersionInUrl = true;
     });
+
+builder.Services.AddHybridCache(options =>
+{
+    options.DefaultEntryOptions = new HybridCacheEntryOptions
+    {
+        Expiration = TimeSpan.FromMinutes(10),
+        LocalCacheExpiration = TimeSpan.FromMinutes(2),
+    };
+});
 
 // ============================================
 // EXERCISE 6: ProblemDetails
