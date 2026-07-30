@@ -63,6 +63,14 @@ builder
 // Singleton worker is okay because it should use IServiceScopeFactory internally.
 // builder.Services.AddSingleton<EnrollmentWorker>();
 
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy(
+        "AllowAngular",
+        policy => policy.WithOrigins("http://localhost:4200").AllowAnyHeader().AllowAnyMethod()
+    );
+});
+
 builder.Services.AddScoped<IEnrollmentService, EnrollmentService>();
 
 // builder.Services.AddScoped<IEnrollmentService, >
@@ -186,31 +194,12 @@ app.UseAuthorization();
 
 app.UseMiddleware<V1DeprecationMiddleware>();
 
+app.UseCors("AllowAngular");
+
 // ============================================
 // Endpoints
 // ============================================
 
-app.MapGet(
-        "/api/assessments/results",
-        () =>
-            Results.Ok(
-                new
-                {
-                    courseCode = "CS-101",
-                    studentId = "S-001",
-                    letterGrade = "A",
-                }
-            )
-    )
-    .RequireAuthorization();
-
 app.MapControllers();
-
-if (app.Environment.IsDevelopment())
-{
-    using var scope = app.Services.CreateScope();
-    var context = scope.ServiceProvider.GetRequiredService<TmsDbContext>();
-    await DataSeeder.SeedAsync(context);
-}
 
 app.Run();
