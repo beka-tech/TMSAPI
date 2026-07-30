@@ -1,6 +1,7 @@
 using MediatR;
 using TmsApi.Application.Interfaces;
-using TmsApi.Domain.Entities;
+
+// using TmsApi.Domain.Entities;
 
 namespace TmsApi.Application.Courses.Commands;
 
