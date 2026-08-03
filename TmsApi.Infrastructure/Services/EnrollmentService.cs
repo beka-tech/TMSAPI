@@ -27,14 +27,83 @@ public class EnrollmentService(TmsDbContext context, ILogger<EnrollmentService> 
         await context.SaveChangesAsync(ct);
     }
 
-    public Task<EnrollmentResponseDto?> GetByIdAsync(int courseId, int id, CancellationToken ct) =>
-        context
+    public async Task<IReadOnlyList<EnrollmentResponseDto>> GetAllAsync(CancellationToken ct)
+    {
+        return await context
             .Enrollments.AsNoTracking()
-            .Where(e => e.Id == id && e.CourseId == courseId)
-            .Select(e => new EnrollmentResponseDto(e.Id, e.CourseId, e.StudentId, e.EnrolledAt))
-            .FirstOrDefaultAsync(ct);
+            .OrderByDescending(e => e.EnrolledAt)
+            .Select(e => new EnrollmentResponseDto(
+                e.Id,
+                e.StudentId,
+                e.Student.Name,
+                e.Student.RegistrationNumber,
+                e.CourseId,
+                e.Course.Title, // CourseTitle
+                e.Course.Code, // CourseCode
+                e.Grade,
+                e.EnrolledAt
+            ))
+            .ToListAsync(ct);
+    }
 
-    // public async Task<>
+    // public Task<EnrollmentResponseDto?> GetByIdAsync(int courseId, int id, CancellationToken ct) =>
+    //     context
+    //         .Enrollments.AsNoTracking()
+    //         .Where(e => e.Id == id && e.CourseId == courseId)
+    //         .Select(e => new EnrollmentResponseDto(e.Id, e.CourseId, e.StudentId, e.EnrolledAt))
+    //         .FirstOrDefaultAsync(ct);
+    public Task<EnrollmentResponseDto?> GetByIdAsync(
+        int courseId,
+        int enrollmentId,
+        CancellationToken ct
+    )
+    {
+        return context
+            .Enrollments.AsNoTracking()
+            .Where(e => e.Id == enrollmentId && e.CourseId == courseId)
+            .Select(e => new EnrollmentResponseDto(
+                e.Id,
+                e.StudentId,
+                e.Student.Name,
+                e.Student.RegistrationNumber,
+                e.CourseId,
+                e.Course.Title,
+                e.Course.Code,
+                e.Grade,
+                e.EnrolledAt
+            ))
+            .FirstOrDefaultAsync(ct);
+    }
+
+    // public Task<EnrollmentResponseDto?> GetByCourseAsync(int courseId, CancellationToken ct) =>
+    //     context
+    //         .Enrollments.AsNoTracking()
+    //         .Where(e => e.CourseId == courseId)
+    //         .Select(e => new EnrollmentResponseDto(e.Id, e.CourseId, e.StudentId, e.EnrolledAt))
+    //         .FirstOrDefaultAsync(ct);
+
+    public async Task<IReadOnlyList<EnrollmentResponseDto>> GetByCourseAsync(
+        int courseId,
+        CancellationToken ct
+    )
+    {
+        return await context
+            .Enrollments.AsNoTracking()
+            .Where(e => e.CourseId == courseId)
+            .OrderByDescending(e => e.EnrolledAt)
+            .Select(e => new EnrollmentResponseDto(
+                e.Id,
+                e.StudentId,
+                e.Student.Name,
+                e.Student.RegistrationNumber,
+                e.CourseId,
+                e.Course.Title,
+                e.Course.Code,
+                e.Grade,
+                e.EnrolledAt
+            ))
+            .ToListAsync(ct);
+    }
 
     public async Task<EnrollmentResponseDto> CreateAsync(
         int courseId,
@@ -65,14 +134,36 @@ public class EnrollmentService(TmsDbContext context, ILogger<EnrollmentService> 
             );
     }
 
-    public async Task<IReadOnlyList<Enrollment>> GetByStudentIdAsync(
+    // public async Task<IReadOnlyList<Enrollment>> GetByStudentIdAsync(
+    //     int studentId,
+    //     CancellationToken ct
+    // )
+    // {
+    //     return await context
+    //         .Enrollments.Include(e => e.Course)
+    //         .Where(e => e.StudentId == studentId)
+    //         .ToListAsync(ct);
+    // }
+    public async Task<IReadOnlyList<EnrollmentResponseDto>> GetByStudentIdAsync(
         int studentId,
         CancellationToken ct
     )
     {
         return await context
-            .Enrollments.Include(e => e.Course)
+            .Enrollments.AsNoTracking()
             .Where(e => e.StudentId == studentId)
+            .OrderByDescending(e => e.EnrolledAt)
+            .Select(e => new EnrollmentResponseDto(
+                e.Id,
+                e.StudentId,
+                e.Student.Name,
+                e.Student.RegistrationNumber,
+                e.CourseId,
+                e.Course.Title,
+                e.Course.Code,
+                e.Grade,
+                e.EnrolledAt
+            ))
             .ToListAsync(ct);
     }
 }
