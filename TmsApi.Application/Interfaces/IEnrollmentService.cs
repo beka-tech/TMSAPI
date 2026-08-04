@@ -1,5 +1,6 @@
 using TmsApi.Application.DTOs;
 using TmsApi.Domain.Entities;
+using TmsApi.Domain.Enums;
 
 namespace TmsApi.Application.Interfaces;
 
@@ -27,6 +28,19 @@ public interface IEnrollmentService
 
     Task<IReadOnlyList<EnrollmentResponseDto>> GetByStudentIdAsync(
         int studentId,
+        CancellationToken ct
+    );
+
+    // Task<EnrollmentResponseDto?> UpdateStatusAsync(
+    //     int courseId,
+    //     int enrollmentId,
+    //     UpdateEnrollmentStatusRequest request,
+    //     EnrollmentStatus status,
+    //     CancellationToken ct
+    // );
+    Task<EnrollmentResponseDto?> UpdateStatusAsync(
+        int enrollmentId,
+        UpdateEnrollmentStatusRequest request,
         CancellationToken ct
     );
 }

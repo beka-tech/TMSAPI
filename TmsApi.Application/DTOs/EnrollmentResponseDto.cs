@@ -1,4 +1,5 @@
 // namespace TMSAPI.Dtos;
+using TmsApi.Domain.Enums;
 
 namespace TmsApi.Application.DTOs;
 
@@ -11,5 +12,6 @@ public record EnrollmentResponseDto(
     string CourseTitle,
     string CourseCode,
     decimal? Grade,
-    DateTime EnrolledAt
+    DateTime EnrolledAt,
+    EnrollmentStatus Status
 );

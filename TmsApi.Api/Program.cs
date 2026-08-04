@@ -1,11 +1,13 @@
+using System.Text.Json.Serialization;
 using Asp.Versioning;
 using FluentValidation;
 using MediatR;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Hybrid;
+using Npgsql.NameTranslation;
 using Scalar.AspNetCore;
-using TmsApi.Api.Authentication;
+// using TmsApi.Api.Authentication;
 using TmsApi.Api.ExceptionHandlers;
 using TmsApi.Api.Filters;
 using TmsApi.Api.Middlewares;
@@ -13,6 +15,7 @@ using TmsApi.Api.Options;
 using TmsApi.Application.Behaviors;
 using TmsApi.Application.Enrollments.Commands;
 using TmsApi.Application.Interfaces;
+using TmsApi.Domain.Enums;
 using TmsApi.Infrastructure.Persistence;
 using TmsApi.Infrastructure.Services;
 
@@ -53,9 +56,9 @@ builder.Services.AddControllers(options =>
 });
 
 // Authentication setup
-builder
-    .Services.AddAuthentication("Training")
-    .AddScheme<AuthenticationSchemeOptions, TrainingAuthHandler>("Training", null);
+// builder
+//     .Services.AddAuthentication("Training")
+//     .AddScheme<AuthenticationSchemeOptions, TrainingAuthHandler>("Training", null);
 
 // ============================================
 // EXERCISE 2: Service Registration
@@ -136,12 +139,40 @@ builder.Services.AddProblemDetails();
 // M5 EXERCISE 2: Enable Console SQL Logging
 // ============================================
 
+// builder.Services.AddDbContext<TmsDbContext>(options =>
+//     options
+//         .UseNpgsql(builder.Configuration.GetConnectionString("TmsDatabase"))
+//         .LogTo(Console.WriteLine, LogLevel.Information) // Log SQLto output window
+//         .EnableSensitiveDataLogging()
+// );
+
 builder.Services.AddDbContext<TmsDbContext>(options =>
-    options
-        .UseNpgsql(builder.Configuration.GetConnectionString("TmsDatabase"))
-        .LogTo(Console.WriteLine, LogLevel.Information) // Log SQLto output window
-        .EnableSensitiveDataLogging()
-); // Show parameters in querylogs (dev only)
+{
+    options.UseNpgsql(
+        builder.Configuration.GetConnectionString("TmsDatabase"),
+        npgsqlOptions =>
+            npgsqlOptions.MapEnum<EnrollmentStatus>(
+                enumName: "enrollment_status",
+                schemaName: "public",
+                nameTranslator: new NpgsqlNullNameTranslator()
+            )
+    );
+
+    // Only enable detailed logging in development
+    if (builder.Environment.IsDevelopment())
+    {
+        options.LogTo(Console.WriteLine, LogLevel.Information).EnableSensitiveDataLogging();
+    }
+});
+
+builder
+    .Services.AddControllers()
+    .AddJsonOptions(options =>
+    {
+        options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
+    });
+
+// Show parameters in querylogs (dev only)
 
 // ============================================
 // EXERCISE 3: Options Pattern with Startup Validation

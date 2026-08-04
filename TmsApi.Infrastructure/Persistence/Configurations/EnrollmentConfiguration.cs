@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using TmsApi.Domain.Entities;
+using TmsApi.Domain.Enums;
 
 public class EnrollmentConfiguration : IEntityTypeConfiguration<Enrollment>
 {
@@ -26,5 +27,11 @@ public class EnrollmentConfiguration : IEntityTypeConfiguration<Enrollment>
             .WithMany(c => c.Enrollments)
             .HasForeignKey(e => e.CourseId)
             .OnDelete(DeleteBehavior.Restrict);
+
+        builder
+            .Property(e => e.Status)
+            .HasColumnType("enrollment_status")
+            .HasDefaultValue(EnrollmentStatus.Pending)
+            .IsRequired();
     }
 }
