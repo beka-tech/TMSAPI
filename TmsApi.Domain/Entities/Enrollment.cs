@@ -1,3 +1,5 @@
+using TmsApi.Domain.Enums;
+
 namespace TmsApi.Domain.Entities
 {
     public class Enrollment
@@ -7,6 +9,8 @@ namespace TmsApi.Domain.Entities
         public int CourseId { get; set; }
         public decimal? Grade { get; set; }
         public DateTime EnrolledAt { get; set; } = DateTime.UtcNow;
+
+        public EnrollmentStatus Status { get; set; } = EnrollmentStatus.Pending;
 
         // Navigation Properties back to entities
         public Student Student { get; set; } = null!;
