@@ -11,6 +11,7 @@ namespace TmsApi.Api.Controllers.V2;
 [ApiController]
 [Route("api/v2/enrollments")]
 [Tags("Enrollments")]
+// [ApiVersion(("2.0"))]
 public sealed class EnrollmentsController(IEnrollmentService enrollmentService) : ControllerBase
 {
     [HttpGet]
@@ -26,72 +27,9 @@ public sealed class EnrollmentsController(IEnrollmentService enrollmentService) 
         return Ok(enrollments);
     }
 
-    // [HttpPost("{enrollmentId:int}/approve")]
-    // [ProducesResponseType(typeof(EnrollmentResponseDto), StatusCodes.Status200OK)]
-    // [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
-    // [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    // [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
-    // public async Task<ActionResult<EnrollmentResponseDto>> UpdateStatus(
-    //     int enrollmentId,
-    //     [FromBody] UpdateEnrollmentStatusRequest request,
-    //     CancellationToken ct
-    // )
-    // {
-    //     if (enrollmentId <= 0)
-    //     {
-    //         return BadRequest(
-    //             new ProblemDetails
-    //             {
-    //                 Title = "Invalid enrollment ID",
-    //                 Detail = "Enrollment ID must be greater than zero.",
-    //                 Status = StatusCodes.Status400BadRequest,
-    //             }
-    //         );
-    //     }
-
-    //     try
-    //     {
-    //         var enrollment = await enrollmentService.UpdateStatusAsync(enrollmentId, request, ct);
-
-    //         if (enrollment is null)
-    //         {
-    //             return NotFound(
-    //                 new ProblemDetails
-    //                 {
-    //                     Title = "Enrollment not found",
-    //                     Detail = $"Enrollment {enrollmentId} was not found.",
-    //                     Status = StatusCodes.Status404NotFound,
-    //                 }
-    //             );
-    //         }
-
-    //         return Ok(enrollment);
-    //     }
-    //     catch (ArgumentException exception)
-    //     {
-    //         return BadRequest(
-    //             new ProblemDetails
-    //             {
-    //                 Title = "Invalid enrollment status",
-    //                 Detail = exception.Message,
-    //                 Status = StatusCodes.Status400BadRequest,
-    //             }
-    //         );
-    //     }
-    //     catch (InvalidOperationException exception)
-    //     {
-    //         return Conflict(
-    //             new ProblemDetails
-    //             {
-    //                 Title = "Enrollment status conflict",
-    //                 Detail = exception.Message,
-    //                 Status = StatusCodes.Status409Conflict,
-    //             }
-    //         );
-    //     }
-    // }
-
     [HttpPost("{enrollmentId:int}/approve")]
+    [EndpointSummary("Approve Enrollment")]
+    [EndpointDescription("Approve Enrollments ")]
     public async Task<ActionResult<EnrollmentResponseDto>> UpdateStatus(
         int enrollmentId,
         [FromBody] UpdateEnrollmentStatusRequest request,

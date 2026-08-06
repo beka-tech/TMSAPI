@@ -1,4 +1,3 @@
-// using System.Linq;
 using MediatR;
 using TmsApi.Application.Common;
 using TmsApi.Application.Interfaces;
