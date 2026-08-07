@@ -38,9 +38,13 @@ public interface IEnrollmentService
     //     EnrollmentStatus status,
     //     CancellationToken ct
     // );
-    Task<EnrollmentResponseDto?> UpdateStatusAsync(
-        int enrollmentId,
-        UpdateEnrollmentStatusRequest request,
-        CancellationToken ct
-    );
+    // Task<EnrollmentResponseDto?> UpdateStatusAsync(
+    //     int enrollmentId,
+    //     UpdateEnrollmentStatusRequest request,
+    //     CancellationToken ct
+    // );
+
+    Task ApproveAsync(int enrollmentId, CancellationToken ct);
+
+    Task RejectAsync(int enrollmentId, CancellationToken ct);
 }

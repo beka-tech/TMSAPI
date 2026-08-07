@@ -7,9 +7,6 @@ using TmsApi.Domain.Entities;
 using TmsApi.Domain.Enums;
 using TmsApi.Infrastructure.Persistence;
 
-// namespace TMSAPI.Services;
-// namespace TmsApi.Application.Interfaces;
-
 namespace TmsApi.Infrastructure.Services;
 
 public class EnrollmentService(TmsDbContext context, ILogger<EnrollmentService> logger)
@@ -49,12 +46,6 @@ public class EnrollmentService(TmsDbContext context, ILogger<EnrollmentService> 
             .ToListAsync(ct);
     }
 
-    // public Task<EnrollmentResponseDto?> GetByIdAsync(int courseId, int id, CancellationToken ct) =>
-    //     context
-    //         .Enrollments.AsNoTracking()
-    //         .Where(e => e.Id == id && e.CourseId == courseId)
-    //         .Select(e => new EnrollmentResponseDto(e.Id, e.CourseId, e.StudentId, e.EnrolledAt))
-    //         .FirstOrDefaultAsync(ct);
     public Task<EnrollmentResponseDto?> GetByIdAsync(
         int courseId,
         int enrollmentId,
@@ -79,13 +70,6 @@ public class EnrollmentService(TmsDbContext context, ILogger<EnrollmentService> 
             .FirstOrDefaultAsync(ct);
     }
 
-    // public Task<EnrollmentResponseDto?> GetByCourseAsync(int courseId, CancellationToken ct) =>
-    //     context
-    //         .Enrollments.AsNoTracking()
-    //         .Where(e => e.CourseId == courseId)
-    //         .Select(e => new EnrollmentResponseDto(e.Id, e.CourseId, e.StudentId, e.EnrolledAt))
-    //         .FirstOrDefaultAsync(ct);
-
     public async Task<IReadOnlyList<EnrollmentResponseDto>> GetByCourseAsync(
         int courseId,
         CancellationToken ct
@@ -109,35 +93,6 @@ public class EnrollmentService(TmsDbContext context, ILogger<EnrollmentService> 
             ))
             .ToListAsync(ct);
     }
-
-    // public async Task<EnrollmentResponseDto> CreateAsync(
-    //     int courseId,
-    //     EnrollStudentRequest request,
-    //     CancellationToken ct
-    // )
-    // {
-    //     var enrollment = new Enrollment
-    //     {
-    //         CourseId = courseId,
-    //         StudentId = request.StudentId,
-    //         EnrolledAt = DateTime.UtcNow,
-    //     };
-
-    //     context.Enrollments.Add(enrollment);
-    //     await context.SaveChangesAsync(ct);
-
-    //     logger.LogInformation(
-    //         "Enrollment {EnrollmentId} created for student {StudentId} in course {CourseId}",
-    //         enrollment.Id,
-    //         enrollment.Student,
-    //         enrollment.CourseId
-    //     );
-
-    //     return await GetByIdAsync(courseId, enrollment.Id, ct)
-    //         ?? throw new InvalidOperationException(
-    //             $"Enrollment {enrollment.Id} was created but could not be retrieved."
-    //         );
-    // }
 
     public async Task<EnrollmentResponseDto> CreateAsync(
         int courseId,
@@ -171,16 +126,6 @@ public class EnrollmentService(TmsDbContext context, ILogger<EnrollmentService> 
             );
     }
 
-    // public async Task<IReadOnlyList<Enrollment>> GetByStudentIdAsync(
-    //     int studentId,
-    //     CancellationToken ct
-    // )
-    // {
-    //     return await context
-    //         .Enrollments.Include(e => e.Course)
-    //         .Where(e => e.StudentId == studentId)
-    //         .ToListAsync(ct);
-    // }
     public async Task<IReadOnlyList<EnrollmentResponseDto>> GetByStudentIdAsync(
         int studentId,
         CancellationToken ct
@@ -205,98 +150,42 @@ public class EnrollmentService(TmsDbContext context, ILogger<EnrollmentService> 
             .ToListAsync(ct);
     }
 
-    // public async Task<EnrollmentResponseDto?> UpdateStatusAsync(
-    //     int enrollmentId,
-    //     UpdateEnrollmentStatusRequest request,
-    //     CancellationToken ct
-    // )
-    // {
-    //     var enrollment = await context
-    //         .Enrollments.Include(e => e.Student)
-    //         .Include(e => e.Course)
-    //         .FirstOrDefaultAsync(e => e.Id == enrollmentId, ct);
-
-    //     if (enrollment is null)
-    //     {
-    //         return null;
-    //     }
-
-    //     if (request.Status == EnrollmentStatus.Pending)
-    //     {
-    //         throw new ArgumentException("The new status must be Approved or Rejected.");
-    //     }
-
-    //     if (enrollment.Status != EnrollmentStatus.Pending)
-    //     {
-    //         throw new InvalidOperationException($"Enrollment is already {enrollment.Status}.");
-    //     }
-
-    //     enrollment.Status = request.Status;
-
-    //     await context.SaveChangesAsync(ct);
-
-    //     return new EnrollmentResponseDto(
-    //         enrollment.Id,
-    //         enrollment.StudentId,
-    //         enrollment.Student.Name,
-    //         enrollment.Student.RegistrationNumber,
-    //         enrollment.CourseId,
-    //         enrollment.Course.Title,
-    //         enrollment.Course.Code,
-    //         enrollment.Grade,
-    //         enrollment.EnrolledAt,
-    //         enrollment.Status
-    //     );
-    // }
-
-    public async Task<EnrollmentResponseDto?> UpdateStatusAsync(
-        int enrollmentId,
-        UpdateEnrollmentStatusRequest request,
-        CancellationToken ct
-    )
+    public async Task ApproveAsync(int enrollmentId, CancellationToken ct)
     {
-        if (!Enum.IsDefined(request.Status))
-        {
-            throw new ArgumentException($"Invalid enrollment status: {request.Status}.");
-        }
-
-        if (request.Status == EnrollmentStatus.Pending)
-        {
-            throw new ArgumentException("The new status must be Approved or Rejected.");
-        }
-
-        var enrollment = await context
-            .Enrollments.Include(e => e.Student)
-            .Include(e => e.Course)
-            .FirstOrDefaultAsync(e => e.Id == enrollmentId, ct);
+        var enrollment = await context.Enrollments.FirstOrDefaultAsync(
+            e => e.Id == enrollmentId,
+            ct
+        );
 
         if (enrollment is null)
         {
-            return null;
+            throw new InvalidOperationException($"Enrollment {enrollmentId} was not found.");
         }
 
-        if (enrollment.Status != EnrollmentStatus.Pending)
-        {
-            throw new InvalidOperationException(
-                $"Enrollment {enrollmentId} cannot be changed because its current status is {enrollment.Status}."
-            );
-        }
-
-        enrollment.Status = request.Status;
+        // enrollment.Status = "Approved";
+        enrollment.Status = EnrollmentStatus.Approved;
 
         await context.SaveChangesAsync(ct);
 
-        return new EnrollmentResponseDto(
-            enrollment.Id,
-            enrollment.StudentId,
-            enrollment.Student.Name,
-            enrollment.Student.RegistrationNumber,
-            enrollment.CourseId,
-            enrollment.Course.Title,
-            enrollment.Course.Code,
-            enrollment.Grade,
-            enrollment.EnrolledAt,
-            enrollment.Status
+        logger.LogInformation("Enrollment {EnrollmentId} approved.", enrollmentId);
+    }
+
+    public async Task RejectAsync(int enrollmentId, CancellationToken ct)
+    {
+        var enrollment = await context.Enrollments.FirstOrDefaultAsync(
+            e => e.Id == enrollmentId,
+            ct
         );
+
+        if (enrollment is null)
+        {
+            throw new InvalidOperationException($"Enrollment {enrollmentId} was not found.");
+        }
+
+        enrollment.Status = EnrollmentStatus.Rejected;
+
+        await context.SaveChangesAsync(ct);
+
+        logger.LogInformation("Enrollment {EnrollmentId} rejected.", enrollmentId);
     }
 }
