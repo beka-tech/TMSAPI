@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using System.Threading.Channels;
 using System.Threading.RateLimiting;
 using Asp.Versioning;
 using FluentValidation;
@@ -19,9 +20,12 @@ using TmsApi.Api.RateLimiting;
 using TmsApi.Application.Behaviors;
 using TmsApi.Application.Enrollments.Commands;
 using TmsApi.Application.Interfaces;
+using TmsApi.Application.Transcripts;
 using TmsApi.Domain.Enums;
 using TmsApi.Infrastructure.Persistence;
 using TmsApi.Infrastructure.Services;
+using TmsApi.Infrastructure.Transcripts;
+using TmsApi.Infrastructure.Workers;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -212,6 +216,13 @@ builder.Services.AddScoped<IEnrollmentService, EnrollmentService>();
 builder.Services.AddScoped<IStudentService, StudentService>();
 builder.Services.AddScoped<ICourseService, CourseService>();
 builder.Services.AddScoped<ICachedCourseService, CachedCourseService>();
+builder.Services.AddSingleton<ITranscriptStatusStore, InMemoryTranscriptStatusStore>();
+builder.Services.AddSingleton(
+    Channel.CreateBounded<TranscriptRequest>(
+        new BoundedChannelOptions(100) { FullMode = BoundedChannelFullMode.Wait }
+    )
+);
+builder.Services.AddHostedService<TranscriptWorker>();
 
 // OpenAPI documents, one per API version, plus versioning itself. Clients
 // can specify a version via the URL segment (e.g. /v2/...) or the
