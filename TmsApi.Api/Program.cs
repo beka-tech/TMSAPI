@@ -269,12 +269,24 @@ static async Task WriteRateLimitResponseAsync(OnRejectedContext context, Cancell
 // ============================================================================
 // CORS
 // ============================================================================
+// Load allowed origins from appsettings.Development.json
+var allowedOrigins =
+    builder.Configuration.GetSection("AllowedOrigins").Get<string[]>() ?? ["http://localhost:4200"];
 
+// Register the CORS policy in the Dependency Injection container
 builder.Services.AddCors(options =>
 {
     options.AddPolicy(
-        "AllowAngular",
-        policy => policy.WithOrigins("http://localhost:4200").AllowAnyHeader().AllowAnyMethod()
+        "TmsClient",
+        policy =>
+        {
+            policy
+                .WithOrigins(allowedOrigins)
+                .AllowAnyHeader()
+                .AllowAnyMethod()
+                .AllowCredentials() // Vital for HttpOnly auth cookies in Session 2
+                .SetPreflightMaxAge(TimeSpan.FromMinutes(10));
+        }
     );
 });
 
@@ -459,6 +471,10 @@ builder
     .ValidateOnStart();
 
 // ============================================================================
+// Load allowed origins from appsettings.Development.json
+// ============================================================================
+
+// ============================================================================
 // BUILD APPLICATION
 // ============================================================================
 
@@ -529,7 +545,8 @@ app.UseRateLimiter();
 // can correctly negotiate cross-origin requests.
 //
 
-app.UseCors("AllowAngular");
+// app.UseCors("AllowAngular");
+app.UseCors("TmsClient");
 
 // ============================================================================
 // AUTHENTICATION
