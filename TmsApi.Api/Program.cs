@@ -545,7 +545,6 @@ app.UseRateLimiter();
 // can correctly negotiate cross-origin requests.
 //
 
-// app.UseCors("AllowAngular");
 app.UseCors("TmsClient");
 
 // ============================================================================
