@@ -97,6 +97,16 @@ builder
 builder.Services.AddAuthorization();
 
 // ============================================================================
+// ANTIFORGERY / XSRF
+// ============================================================================
+
+builder.Services.AddAntiforgery(options =>
+{
+    // Angular sends the readable request token using this header.
+    options.HeaderName = "X-XSRF-TOKEN";
+});
+
+// ============================================================================
 // RATE LIMITING
 // ============================================================================
 
@@ -180,11 +190,6 @@ builder.Services.AddRateLimiter(options =>
                 }
             ),
         };
-    });
-
-    builder.Services.AddAntiforgery(options =>
-    {
-        options.HeaderName = "X-XSRF-TOKEN";
     });
 
     // ------------------------------------------------------------------------
