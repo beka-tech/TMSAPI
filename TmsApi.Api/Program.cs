@@ -484,12 +484,16 @@ builder
 // ============================================================================
 // Load allowed origins from appsettings.Development.json
 // ============================================================================
+// Add RFC 7807 ProblemDetails support to the DI container
+builder.Services.AddProblemDetails();
 
 // ============================================================================
 // BUILD APPLICATION
 // ============================================================================
 
 var app = builder.Build();
+
+app.UseStatusCodePages(); // Converts 4xx/5xx responses into standard ProblemDetails payloads
 
 // ============================================================================
 // DEVELOPMENT / PRODUCTION ERROR HANDLING
