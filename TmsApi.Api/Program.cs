@@ -528,6 +528,8 @@ else
     app.UseExceptionHandler();
 }
 
+app.MapHub<TmsHub>("/hubs/tms").RequireCors("TmsClient");
+
 // ============================================================================
 // STATUS CODE RESPONSES
 // ============================================================================
