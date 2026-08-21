@@ -5,6 +5,7 @@ using Asp.Versioning;
 using FluentValidation;
 using MediatR;
 using Microsoft.AspNetCore.Antiforgery;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
@@ -12,6 +13,8 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Hybrid;
 using Npgsql.NameTranslation;
 using Scalar.AspNetCore;
+using Tms.Api.Authorization;
+using TmsApi.Api.Authorization;
 using TmsApi.Api.ExceptionHandlers;
 using TmsApi.Api.Filters;
 using TmsApi.Api.Hubs;
@@ -481,6 +484,14 @@ builder.Services.AddAuthorization();
 // ============================================================================
 // OPTIONS
 // ============================================================================
+
+builder
+    .Services.AddAuthorizationBuilder()
+    .AddPolicy(
+        "CanEditCourse",
+        policy => policy.Requirements.Add(new CourseInstructorRequirement())
+    );
+builder.Services.AddSingleton<IAuthorizationHandler, CourseInstructorHandler>();
 
 builder
     .Services.AddOptions<PaymentOptions>()
