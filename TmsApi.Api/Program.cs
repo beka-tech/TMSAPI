@@ -499,6 +499,14 @@ builder
     .ValidateDataAnnotations()
     .ValidateOnStart();
 
+builder
+    .Services.AddAuthorizationBuilder()
+    .AddPolicy(
+        "CanEditCourse",
+        policy => policy.Requirements.Add(new CourseInstructorRequirement())
+    );
+builder.Services.AddSingleton<IAuthorizationHandler, CourseInstructorHandler>();
+
 // ============================================================================
 // BUILD APPLICATION
 // ============================================================================
