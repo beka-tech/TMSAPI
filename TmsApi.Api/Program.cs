@@ -112,6 +112,13 @@ builder.Services.AddAntiforgery(options =>
 
 builder.Services.AddRateLimiter(options =>
 {
+    options.AddFixedWindowLimiter("AuthLimiter", options =>
+    {
+        options.PermitLimit = 5;
+        options.Window = TimeSpan.FromMinutes(1);
+        options.QueueLimit = 0;
+    });
+
     // ------------------------------------------------------------------------
     // GLOBAL RATE LIMITER
     // ------------------------------------------------------------------------
@@ -557,6 +564,23 @@ else
 // ============================================================================
 
 app.UseStatusCodePages();
+
+// ============================================================================
+// SECURITY RESPONSE HEADERS
+// ============================================================================
+
+app.Use(async (context, next) =>
+{
+    context.Response.Headers.Append("X-Content-Type-Options", "nosniff");
+    context.Response.Headers.Append("X-Frame-Options", "DENY");
+    context.Response.Headers.Append("Referrer-Policy", "strict-origin-when-cross-origin");
+    context.Response.Headers.Append(
+        "Content-Security-Policy",
+        "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline';"
+    );
+
+    await next(context);
+});
 
 // ============================================================================
 // CUSTOM REQUEST LOGGING
