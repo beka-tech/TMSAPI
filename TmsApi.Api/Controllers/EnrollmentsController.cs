@@ -1,5 +1,5 @@
+using Asp.Versioning;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.SignalR;
 using TmsApi.Api.Hubs;
 using TmsApi.Application.Common;
 using TmsApi.Application.DTOs;
@@ -11,13 +11,13 @@ namespace TmsApi.Api.Controllers;
 [ApiController]
 [Route("api/courses/{courseId:int}/enrollments")]
 // [Route("api/enrollments")]
+[ApiVersion("1.0")]
 [Tags("Enrollments")]
 [Produces("application/json")]
 [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status500InternalServerError)]
 public class EnrollmentsController(
     ICourseService courseService,
-    IEnrollmentService enrollmentService,
-    IHubContext<TmsHub, ITmsHubClient> hubContext
+    IEnrollmentService enrollmentService
 ) : ControllerBase
 {
     [HttpGet(Name = "ListCourseEnrollments")]
