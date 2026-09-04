@@ -27,6 +27,7 @@ using TmsApi.Api.Options;
 using TmsApi.Api.RateLimiting;
 using TmsApi.Application.Behaviors;
 using TmsApi.Application.Enrollments.Commands;
+using TmsApi.Application.Hubs;
 using TmsApi.Application.Interfaces;
 using TmsApi.Application.Transcripts;
 using TmsApi.Domain.Enums;
@@ -112,12 +113,15 @@ builder.Services.AddAntiforgery(options =>
 
 builder.Services.AddRateLimiter(options =>
 {
-    options.AddFixedWindowLimiter("AuthLimiter", options =>
-    {
-        options.PermitLimit = 5;
-        options.Window = TimeSpan.FromMinutes(1);
-        options.QueueLimit = 0;
-    });
+    options.AddFixedWindowLimiter(
+        "AuthLimiter",
+        options =>
+        {
+            options.PermitLimit = 5;
+            options.Window = TimeSpan.FromMinutes(1);
+            options.QueueLimit = 0;
+        }
+    );
 
     // ------------------------------------------------------------------------
     // GLOBAL RATE LIMITER
@@ -324,6 +328,7 @@ builder.Services.AddSingleton(
 // ============================================================================
 
 builder.Services.AddSingleton<ITranscriptNotifier, SignalRTranscriptNotifier>();
+builder.Services.AddSingleton<IEnrollmentStatusNotifier, SignalREnrollmentStatusNotifier>();
 
 // ============================================================================
 // BACKGROUND WORKER
@@ -562,25 +567,23 @@ app.UseStatusCodePages();
 // SECURITY RESPONSE HEADERS
 // ============================================================================
 
-app.Use(async (context, next) =>
-{
-    context.Response.Headers.Append("X-Content-Type-Options", "nosniff");
-    context.Response.Headers.Append("X-Frame-Options", "DENY");
-    context.Response.Headers.Append("Referrer-Policy", "strict-origin-when-cross-origin");
+app.Use(
+    async (context, next) =>
+    {
+        context.Response.Headers.Append("X-Content-Type-Options", "nosniff");
+        context.Response.Headers.Append("X-Frame-Options", "DENY");
+        context.Response.Headers.Append("Referrer-Policy", "strict-origin-when-cross-origin");
 
-    var contentSecurityPolicy =
-        app.Environment.IsDevelopment()
-        && context.Request.Path.StartsWithSegments("/scalar")
-            ? "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline';"
-            : "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline';";
+        var contentSecurityPolicy =
+            app.Environment.IsDevelopment() && context.Request.Path.StartsWithSegments("/scalar")
+                ? "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline';"
+                : "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline';";
 
-    context.Response.Headers.Append(
-        "Content-Security-Policy",
-        contentSecurityPolicy
-    );
+        context.Response.Headers.Append("Content-Security-Policy", contentSecurityPolicy);
 
-    await next(context);
-});
+        await next(context);
+    }
+);
 
 // ============================================================================
 // CUSTOM REQUEST LOGGING

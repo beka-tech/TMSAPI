@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using Npgsql;
 using TmsApi.Application.Common;
 using TmsApi.Application.DTOs;
+using TmsApi.Application.Hubs;
 using TmsApi.Application.Interfaces;
 using TmsApi.Domain.Entities;
 using TmsApi.Domain.Enums;
@@ -11,8 +12,11 @@ using TmsApi.Infrastructure.Persistence;
 
 namespace TmsApi.Infrastructure.Services;
 
-public class EnrollmentService(TmsDbContext context, ILogger<EnrollmentService> logger)
-    : IEnrollmentService
+public class EnrollmentService(
+    TmsDbContext context,
+    ILogger<EnrollmentService> logger,
+    IEnrollmentStatusNotifier enrollmentStatusNotifier
+) : IEnrollmentService
 {
     public async Task<StudentEnrollmentEligibility> GetStudentEligibilityAsync(
         int studentId,
@@ -35,9 +39,10 @@ public class EnrollmentService(TmsDbContext context, ILogger<EnrollmentService> 
 
     public Task<bool> ExistsAsync(int studentId, string courseCode, CancellationToken ct)
     {
-        return context
-            .Enrollments
-            .AnyAsync(e => e.StudentId == studentId && e.Course.Code == courseCode, ct);
+        return context.Enrollments.AnyAsync(
+            e => e.StudentId == studentId && e.Course.Code == courseCode,
+            ct
+        );
     }
 
     public async Task AddAsync(Enrollment enrollment, CancellationToken ct)
@@ -240,6 +245,7 @@ public class EnrollmentService(TmsDbContext context, ILogger<EnrollmentService> 
 
         enrollment.Status = status;
         await context.SaveChangesAsync(ct);
+        await enrollmentStatusNotifier.EnrollmentStatusUpdatedAsync(enrollmentId, status, ct);
 
         logger.LogInformation(
             "Enrollment {EnrollmentId} status changed to {Status}",
@@ -250,11 +256,7 @@ public class EnrollmentService(TmsDbContext context, ILogger<EnrollmentService> 
         return true;
     }
 
-    public async Task<bool> UpdateGradeAsync(
-        int enrollmentId,
-        decimal grade,
-        CancellationToken ct
-    )
+    public async Task<bool> UpdateGradeAsync(int enrollmentId, decimal grade, CancellationToken ct)
     {
         if (grade is < 0m or > 100m)
         {
