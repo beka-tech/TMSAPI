@@ -5,10 +5,10 @@ using TmsApi.Application.DTOs;
 using TmsApi.Application.Interfaces;
 using TmsApi.Domain.Entities;
 
-namespace TmsApi.Api.Controllers.V1;
+namespace TmsApi.Api.Controllers.V2;
 
 [ApiController]
-[ApiVersion("1.0")]
+[ApiVersion("2.0")]
 [Route("api/v{version:apiVersion}/students")]
 [Tags("Students")]
 public class StudentsController(IStudentService studentService) : ControllerBase
@@ -54,7 +54,7 @@ public class StudentsController(IStudentService studentService) : ControllerBase
 
             return CreatedAtAction(
                 nameof(GetById),
-                new { version = "1.0", id = student.Id },
+                new { version = "2.0", id = student.Id },
                 ToResponse(student)
             );
         }

@@ -1,3 +1,4 @@
+using TmsApi.Application.Common;
 using TmsApi.Application.DTOs;
 using TmsApi.Domain.Entities;
 using TmsApi.Domain.Enums;
@@ -6,6 +7,11 @@ namespace TmsApi.Application.Interfaces;
 
 public interface IEnrollmentService
 {
+    Task<StudentEnrollmentEligibility> GetStudentEligibilityAsync(
+        int studentId,
+        CancellationToken ct
+    );
+
     // Task<EnrollmentResponseDto?> GetByIdAsync(int courseId, int id, CancellationToken ct);
     Task<EnrollmentResponseDto> CreateAsync(
         int courseId,

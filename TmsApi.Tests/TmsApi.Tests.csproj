@@ -24,6 +24,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\TmsApi.Application\TmsApi.Application.csproj" />
+    <ProjectReference Include="..\TmsApi.Infrastructure\TmsApi.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>

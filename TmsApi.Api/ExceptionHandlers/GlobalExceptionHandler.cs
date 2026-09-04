@@ -1,6 +1,8 @@
 using FluentValidation;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
+using TmsApi.Application.Common;
+using DataAnnotationsValidationException = System.ComponentModel.DataAnnotations.ValidationException;
 
 namespace TmsApi.Api.ExceptionHandlers;
 
@@ -12,21 +14,46 @@ public class GlobalExceptionHandler(ILogger<GlobalExceptionHandler> logger) : IE
         CancellationToken ct
     )
     {
-        var (status, title, detail, errors) = exception switch
+        var (status, title, detail, type, errors) = exception switch
         {
             ValidationException ve => (
                 StatusCodes.Status400BadRequest,
                 "Validation failed",
                 "One or more fields are invalid. See errors for details.",
+                "https://tms.local/errors/validation_failed",
                 (IDictionary<string, string[]>?)
                     ve
                         .Errors.GroupBy(e => e.PropertyName)
                         .ToDictionary(g => g.Key, g => g.Select(e => e.ErrorMessage).ToArray())
             ),
+            DataAnnotationsValidationException validation => (
+                StatusCodes.Status400BadRequest,
+                "Validation failed",
+                validation.Message,
+                "https://tms.local/errors/validation_failed",
+                null
+            ),
+            DuplicateRegistrationNumberException duplicate => (
+                StatusCodes.Status409Conflict,
+                "Duplicate registration number",
+                duplicate.Message,
+                "https://tms.local/errors/duplicate_registration_number",
+                null
+            ),
+            EnrollmentRejectedException rejected => (
+                rejected.Error.Code == "student_not_found"
+                    ? StatusCodes.Status404NotFound
+                    : StatusCodes.Status409Conflict,
+                "Enrollment rejected",
+                rejected.Message,
+                $"https://tms.local/errors/{rejected.Error.Code}",
+                null
+            ),
             _ => (
                 StatusCodes.Status500InternalServerError,
                 "Server error",
                 $"An unexpected error occurred. Trace ID: {httpContext.TraceIdentifier}",
+                "https://tms.local/errors/server_error",
                 null
             ),
         };
@@ -43,6 +70,7 @@ public class GlobalExceptionHandler(ILogger<GlobalExceptionHandler> logger) : IE
             Status = status,
             Title = title,
             Detail = detail,
+            Type = type,
             Instance = httpContext.Request.Path,
         };
 
