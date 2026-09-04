@@ -120,9 +120,12 @@ public class EnrollmentsController(
         }
         catch (EnrollmentRejectedException exception)
         {
-            var status = exception.Error.Code == "student_not_found"
-                ? StatusCodes.Status404NotFound
-                : StatusCodes.Status409Conflict;
+            var status = exception.Error.Code switch
+            {
+                "student_not_found" or "course_not_found" => StatusCodes.Status404NotFound,
+                "already_enrolled" => StatusCodes.Status409Conflict,
+                _ => StatusCodes.Status400BadRequest,
+            };
 
             return Problem(
                 statusCode: status,

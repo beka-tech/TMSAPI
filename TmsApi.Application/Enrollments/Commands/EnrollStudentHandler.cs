@@ -32,13 +32,13 @@ public class EnrollStudentHandler(
             return Result<EnrollmentCreated, EnrollmentError>.Failure(
                 EnrollmentError.CourseNotFound(command.CourseCode)
             );
-        if (course.Enrollments.Count >= course.MaxCapacity)
-            return Result<EnrollmentCreated, EnrollmentError>.Failure(
-                EnrollmentError.CourseFull(course.Title, course.MaxCapacity)
-            );
         if (await enrollmentService.ExistsAsync(command.StudentId, command.CourseCode, ct))
             return Result<EnrollmentCreated, EnrollmentError>.Failure(
                 EnrollmentError.AlreadyEnrolled(command.StudentId, command.CourseCode)
+            );
+        if (course.Enrollments.Count >= course.MaxCapacity)
+            return Result<EnrollmentCreated, EnrollmentError>.Failure(
+                EnrollmentError.CourseFull(course.Title, course.MaxCapacity)
             );
         var enrollment = new Enrollment
         {

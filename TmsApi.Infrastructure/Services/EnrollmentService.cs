@@ -1,5 +1,7 @@
+using System.ComponentModel.DataAnnotations;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Npgsql;
 using TmsApi.Application.Common;
 using TmsApi.Application.DTOs;
 using TmsApi.Application.Interfaces;
@@ -34,7 +36,7 @@ public class EnrollmentService(TmsDbContext context, ILogger<EnrollmentService> 
     public Task<bool> ExistsAsync(int studentId, string courseCode, CancellationToken ct)
     {
         return context
-            .Enrollments.Include(e => e.Course)
+            .Enrollments
             .AnyAsync(e => e.StudentId == studentId && e.Course.Code == courseCode, ct);
     }
 
@@ -43,7 +45,19 @@ public class EnrollmentService(TmsDbContext context, ILogger<EnrollmentService> 
         await EnsureStudentCanEnrollAsync(enrollment.StudentId, ct);
         context.Enrollments.Add(enrollment);
 
-        await context.SaveChangesAsync(ct);
+        try
+        {
+            await context.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException exception) when (IsDuplicateEnrollmentViolation(exception))
+        {
+            throw new EnrollmentRejectedException(
+                EnrollmentError.AlreadyEnrolled(
+                    enrollment.StudentId,
+                    $"course {enrollment.CourseId}"
+                )
+            );
+        }
     }
 
     public async Task<IReadOnlyList<EnrollmentResponseDto>> GetAllAsync(CancellationToken ct)
@@ -122,6 +136,27 @@ public class EnrollmentService(TmsDbContext context, ILogger<EnrollmentService> 
     {
         await EnsureStudentCanEnrollAsync(request.StudentId, ct);
 
+        var alreadyEnrolled = await context.Enrollments.AnyAsync(
+            e => e.StudentId == request.StudentId && e.CourseId == courseId,
+            ct
+        );
+
+        if (alreadyEnrolled)
+        {
+            var courseCode = await context
+                .Courses.AsNoTracking()
+                .Where(c => c.Id == courseId)
+                .Select(c => c.Code)
+                .FirstOrDefaultAsync(ct);
+
+            throw new EnrollmentRejectedException(
+                EnrollmentError.AlreadyEnrolled(
+                    request.StudentId,
+                    courseCode ?? $"course {courseId}"
+                )
+            );
+        }
+
         var enrollment = new Enrollment
         {
             CourseId = courseId,
@@ -131,7 +166,17 @@ public class EnrollmentService(TmsDbContext context, ILogger<EnrollmentService> 
         };
 
         context.Enrollments.Add(enrollment);
-        await context.SaveChangesAsync(ct);
+
+        try
+        {
+            await context.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException exception) when (IsDuplicateEnrollmentViolation(exception))
+        {
+            throw new EnrollmentRejectedException(
+                EnrollmentError.AlreadyEnrolled(request.StudentId, $"course {courseId}")
+            );
+        }
 
         logger.LogInformation(
             "Enrollment {EnrollmentId} created for student {StudentId} "
@@ -172,8 +217,17 @@ public class EnrollmentService(TmsDbContext context, ILogger<EnrollmentService> 
             .ToListAsync(ct);
     }
 
-    public async Task ApproveAsync(int enrollmentId, CancellationToken ct)
+    public async Task<bool> UpdateStatusAsync(
+        int enrollmentId,
+        EnrollmentStatus status,
+        CancellationToken ct
+    )
     {
+        if (!Enum.IsDefined(status))
+        {
+            throw new ValidationException($"'{status}' is not a valid enrollment status.");
+        }
+
         var enrollment = await context.Enrollments.FirstOrDefaultAsync(
             e => e.Id == enrollmentId,
             ct
@@ -181,34 +235,68 @@ public class EnrollmentService(TmsDbContext context, ILogger<EnrollmentService> 
 
         if (enrollment is null)
         {
-            throw new InvalidOperationException($"Enrollment {enrollmentId} was not found.");
+            return false;
         }
 
-        // enrollment.Status = "Approved";
-        enrollment.Status = EnrollmentStatus.Approved;
-
+        enrollment.Status = status;
         await context.SaveChangesAsync(ct);
 
-        logger.LogInformation("Enrollment {EnrollmentId} approved.", enrollmentId);
+        logger.LogInformation(
+            "Enrollment {EnrollmentId} status changed to {Status}",
+            enrollmentId,
+            status
+        );
+
+        return true;
+    }
+
+    public async Task<bool> UpdateGradeAsync(
+        int enrollmentId,
+        decimal grade,
+        CancellationToken ct
+    )
+    {
+        if (grade is < 0m or > 100m)
+        {
+            throw new ValidationException("Grade must be between 0 and 100.");
+        }
+
+        var enrollment = await context.Enrollments.FirstOrDefaultAsync(
+            e => e.Id == enrollmentId,
+            ct
+        );
+
+        if (enrollment is null)
+        {
+            return false;
+        }
+
+        enrollment.Grade = grade;
+        await context.SaveChangesAsync(ct);
+
+        logger.LogInformation(
+            "Enrollment {EnrollmentId} grade changed to {Grade}",
+            enrollmentId,
+            grade
+        );
+
+        return true;
+    }
+
+    public async Task ApproveAsync(int enrollmentId, CancellationToken ct)
+    {
+        if (!await UpdateStatusAsync(enrollmentId, EnrollmentStatus.Approved, ct))
+        {
+            throw new InvalidOperationException($"Enrollment {enrollmentId} was not found.");
+        }
     }
 
     public async Task RejectAsync(int enrollmentId, CancellationToken ct)
     {
-        var enrollment = await context.Enrollments.FirstOrDefaultAsync(
-            e => e.Id == enrollmentId,
-            ct
-        );
-
-        if (enrollment is null)
+        if (!await UpdateStatusAsync(enrollmentId, EnrollmentStatus.Rejected, ct))
         {
             throw new InvalidOperationException($"Enrollment {enrollmentId} was not found.");
         }
-
-        enrollment.Status = EnrollmentStatus.Rejected;
-
-        await context.SaveChangesAsync(ct);
-
-        logger.LogInformation("Enrollment {EnrollmentId} rejected.", enrollmentId);
     }
 
     private async Task EnsureStudentCanEnrollAsync(int studentId, CancellationToken ct)
@@ -227,4 +315,12 @@ public class EnrollmentService(TmsDbContext context, ILogger<EnrollmentService> 
             throw new EnrollmentRejectedException(error);
         }
     }
+
+    private static bool IsDuplicateEnrollmentViolation(DbUpdateException exception) =>
+        exception.InnerException
+            is PostgresException
+            {
+                SqlState: PostgresErrorCodes.UniqueViolation,
+                ConstraintName: "IX_Enrollments_StudentId_CourseId",
+            };
 }

@@ -41,9 +41,12 @@ public class GlobalExceptionHandler(ILogger<GlobalExceptionHandler> logger) : IE
                 null
             ),
             EnrollmentRejectedException rejected => (
-                rejected.Error.Code == "student_not_found"
-                    ? StatusCodes.Status404NotFound
-                    : StatusCodes.Status409Conflict,
+                rejected.Error.Code switch
+                {
+                    "student_not_found" or "course_not_found" => StatusCodes.Status404NotFound,
+                    "already_enrolled" => StatusCodes.Status409Conflict,
+                    _ => StatusCodes.Status400BadRequest,
+                },
                 "Enrollment rejected",
                 rejected.Message,
                 $"https://tms.local/errors/{rejected.Error.Code}",

@@ -550,14 +550,7 @@ var app = builder.Build();
 // ERROR HANDLING
 // ============================================================================
 
-if (app.Environment.IsDevelopment())
-{
-    app.UseDeveloperExceptionPage();
-}
-else
-{
-    app.UseExceptionHandler();
-}
+app.UseExceptionHandler();
 
 // ============================================================================
 // STATUS CODE → PROBLEM DETAILS
