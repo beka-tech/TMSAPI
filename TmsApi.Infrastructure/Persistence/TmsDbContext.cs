@@ -25,6 +25,11 @@ public class TmsDbContext(DbContextOptions<TmsDbContext> options)
         // Apply only the student configuration here. Enabling assembly-wide scanning would also
         // change unrelated course and enrollment mappings in the existing database model.
         modelBuilder.ApplyConfiguration(new StudentConfiguration());
+
+        modelBuilder
+            .Entity<Enrollment>()
+            .HasIndex(e => new { e.StudentId, e.CourseId })
+            .IsUnique();
     }
 }
 

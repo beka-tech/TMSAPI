@@ -37,6 +37,14 @@ public interface IEnrollmentService
         CancellationToken ct
     );
 
+    Task<bool> UpdateStatusAsync(
+        int enrollmentId,
+        EnrollmentStatus status,
+        CancellationToken ct
+    );
+
+    Task<bool> UpdateGradeAsync(int enrollmentId, decimal grade, CancellationToken ct);
+
     // Task<EnrollmentResponseDto?> UpdateStatusAsync(
     //     int courseId,
     //     int enrollmentId,
