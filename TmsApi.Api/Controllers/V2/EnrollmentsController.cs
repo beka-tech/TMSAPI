@@ -1,11 +1,15 @@
 using Asp.Versioning;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
+using TmsApi.Api.Hubs;
 using TmsApi.Application.Common;
 using TmsApi.Application.DTOs;
 using TmsApi.Application.Enrollments.Commands;
 using TmsApi.Application.Enrollments.Queries;
 using TmsApi.Application.Interfaces;
+
+// TmsApi.Api.Hubs
 
 namespace TmsApi.Api.Controllers.V2;
 
