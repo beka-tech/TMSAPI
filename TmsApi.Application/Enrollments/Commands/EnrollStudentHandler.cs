@@ -15,13 +15,23 @@ public class EnrollStudentHandler(
         CancellationToken ct
     )
     {
-        // add on the services on CourseService
+        var eligibility = await enrollmentService.GetStudentEligibilityAsync(command.StudentId, ct);
+
+        if (eligibility == StudentEnrollmentEligibility.NotFound)
+            return Result<EnrollmentCreated, EnrollmentError>.Failure(
+                EnrollmentError.StudentNotFound(command.StudentId)
+            );
+
+        if (eligibility == StudentEnrollmentEligibility.Inactive)
+            return Result<EnrollmentCreated, EnrollmentError>.Failure(
+                EnrollmentError.StudentInactive(command.StudentId)
+            );
+
         var course = await courseService.GetByCodeAsync(command.CourseCode, ct);
         if (course is null)
             return Result<EnrollmentCreated, EnrollmentError>.Failure(
                 EnrollmentError.CourseNotFound(command.CourseCode)
             );
-        // if (course.Enrollments?.Count() >= course.MaxCapacity)
         if (course.Enrollments.Count >= course.MaxCapacity)
             return Result<EnrollmentCreated, EnrollmentError>.Failure(
                 EnrollmentError.CourseFull(course.Title, course.MaxCapacity)
@@ -36,7 +46,15 @@ public class EnrollStudentHandler(
             CourseId = course.Id,
             EnrolledAt = DateTime.UtcNow,
         };
-        await enrollmentService.AddAsync(enrollment, ct);
+        try
+        {
+            await enrollmentService.AddAsync(enrollment, ct);
+        }
+        catch (EnrollmentRejectedException exception)
+        {
+            return Result<EnrollmentCreated, EnrollmentError>.Failure(exception.Error);
+        }
+
         return Result<EnrollmentCreated, EnrollmentError>.Success(
             new EnrollmentCreated(enrollment.Id, enrollment.StudentId, course.Code)
         );

@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using TmsApi.Domain.Entities;
 using TmsApi.Infrastructure.Identity;
+using TmsApi.Infrastructure.Persistence.Configurations;
 
 namespace TmsApi.Infrastructure.Persistence;
 
@@ -21,17 +22,9 @@ public class TmsDbContext(DbContextOptions<TmsDbContext> options)
         // Configure Identity's tables first.
         base.OnModelCreating(modelBuilder);
 
-        // Your existing Student configuration
-        modelBuilder
-            .Entity<Student>()
-            .Property<DateTime>("LastUpdated")
-            .HasColumnType("timestamp without time zone")
-            .HasDefaultValueSql("CURRENT_TIMESTAMP")
-            .IsConcurrencyToken();
-
-        // If you have IEntityTypeConfiguration<T> classes,
-        // you can also enable this:
-        // modelBuilder.ApplyConfigurationsFromAssembly(typeof(TmsDbContext).Assembly);
+        // Apply only the student configuration here. Enabling assembly-wide scanning would also
+        // change unrelated course and enrollment mappings in the existing database model.
+        modelBuilder.ApplyConfiguration(new StudentConfiguration());
     }
 }
 

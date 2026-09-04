@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using TmsApi.Api.Hubs;
+using TmsApi.Application.Common;
 using TmsApi.Application.DTOs;
 using TmsApi.Application.Hubs;
 using TmsApi.Application.Interfaces;
@@ -60,6 +61,34 @@ public class EnrollmentsController(
         CancellationToken ct
     )
     {
+        var eligibility = await enrollmentService.GetStudentEligibilityAsync(request.StudentId, ct);
+
+        if (eligibility == StudentEnrollmentEligibility.NotFound)
+        {
+            return NotFound(
+                new ProblemDetails
+                {
+                    Title = "Enrollment rejected",
+                    Detail = $"Student {request.StudentId} was not found.",
+                    Status = StatusCodes.Status404NotFound,
+                    Type = "https://tms.local/errors/student_not_found",
+                }
+            );
+        }
+
+        if (eligibility == StudentEnrollmentEligibility.Inactive)
+        {
+            return Conflict(
+                new ProblemDetails
+                {
+                    Title = "Enrollment rejected",
+                    Detail = $"Student {request.StudentId} is inactive and cannot enroll.",
+                    Status = StatusCodes.Status409Conflict,
+                    Type = "https://tms.local/errors/student_inactive",
+                }
+            );
+        }
+
         var course = await courseService.GetByIdAsync(courseId, ct);
 
         if (course is null)
@@ -80,11 +109,27 @@ public class EnrollmentsController(
             );
         }
 
-        var enrollment = await enrollmentService.CreateAsync(courseId, request, ct);
-        return CreatedAtAction(
-            nameof(GetEnrollment),
-            new { courseId, id = enrollment.Id },
-            enrollment
-        );
+        try
+        {
+            var enrollment = await enrollmentService.CreateAsync(courseId, request, ct);
+            return CreatedAtAction(
+                nameof(GetEnrollment),
+                new { courseId, id = enrollment.Id },
+                enrollment
+            );
+        }
+        catch (EnrollmentRejectedException exception)
+        {
+            var status = exception.Error.Code == "student_not_found"
+                ? StatusCodes.Status404NotFound
+                : StatusCodes.Status409Conflict;
+
+            return Problem(
+                statusCode: status,
+                title: "Enrollment rejected",
+                detail: exception.Message,
+                type: $"https://tms.local/errors/{exception.Error.Code}"
+            );
+        }
     }
 }

@@ -2,7 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using TmsApi.Domain.Entities;
 
-namespace TMSAPI.Configurations;
+namespace TmsApi.Infrastructure.Persistence.Configurations;
 
 public class StudentConfiguration : IEntityTypeConfiguration<Student>
 {
@@ -22,6 +22,10 @@ public class StudentConfiguration : IEntityTypeConfiguration<Student>
 
         builder.HasQueryFilter(s => !s.IsDeleted);
 
-        builder.Property<DateTime>("LastUpdated").HasDefaultValueSql("NOW()").IsConcurrencyToken();
+        builder
+            .Property<DateTime>("LastUpdated")
+            .HasColumnType("timestamp without time zone")
+            .HasDefaultValueSql("CURRENT_TIMESTAMP")
+            .IsConcurrencyToken();
     }
 }

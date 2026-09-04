@@ -36,9 +36,10 @@ public class EnrollmentsController(
             {
                 var status = error.Code switch
                 {
-                    "course_not_found" => StatusCodes.Status404NotFound,
+                    "course_not_found" or "student_not_found" => StatusCodes.Status404NotFound,
 
-                    "course_full" or "already_enrolled" => StatusCodes.Status409Conflict,
+                    "course_full" or "already_enrolled" or "student_inactive" =>
+                        StatusCodes.Status409Conflict,
 
                     _ => StatusCodes.Status400BadRequest,
                 };

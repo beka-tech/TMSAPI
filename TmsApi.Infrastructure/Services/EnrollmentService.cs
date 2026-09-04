@@ -1,6 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using TmsApi.Application.DTOs;
+using TmsApi.Application.Common;
 using TmsApi.Application.DTOs;
 using TmsApi.Application.Interfaces;
 using TmsApi.Domain.Entities;
@@ -12,6 +12,25 @@ namespace TmsApi.Infrastructure.Services;
 public class EnrollmentService(TmsDbContext context, ILogger<EnrollmentService> logger)
     : IEnrollmentService
 {
+    public async Task<StudentEnrollmentEligibility> GetStudentEligibilityAsync(
+        int studentId,
+        CancellationToken ct
+    )
+    {
+        var isActive = await context
+            .Students.AsNoTracking()
+            .Where(s => s.Id == studentId)
+            .Select(s => (bool?)s.IsActive)
+            .FirstOrDefaultAsync(ct);
+
+        return isActive switch
+        {
+            null => StudentEnrollmentEligibility.NotFound,
+            false => StudentEnrollmentEligibility.Inactive,
+            true => StudentEnrollmentEligibility.Eligible,
+        };
+    }
+
     public Task<bool> ExistsAsync(int studentId, string courseCode, CancellationToken ct)
     {
         return context
@@ -21,6 +40,7 @@ public class EnrollmentService(TmsDbContext context, ILogger<EnrollmentService> 
 
     public async Task AddAsync(Enrollment enrollment, CancellationToken ct)
     {
+        await EnsureStudentCanEnrollAsync(enrollment.StudentId, ct);
         context.Enrollments.Add(enrollment);
 
         await context.SaveChangesAsync(ct);
@@ -100,6 +120,8 @@ public class EnrollmentService(TmsDbContext context, ILogger<EnrollmentService> 
         CancellationToken ct
     )
     {
+        await EnsureStudentCanEnrollAsync(request.StudentId, ct);
+
         var enrollment = new Enrollment
         {
             CourseId = courseId,
@@ -187,5 +209,22 @@ public class EnrollmentService(TmsDbContext context, ILogger<EnrollmentService> 
         await context.SaveChangesAsync(ct);
 
         logger.LogInformation("Enrollment {EnrollmentId} rejected.", enrollmentId);
+    }
+
+    private async Task EnsureStudentCanEnrollAsync(int studentId, CancellationToken ct)
+    {
+        var eligibility = await GetStudentEligibilityAsync(studentId, ct);
+
+        var error = eligibility switch
+        {
+            StudentEnrollmentEligibility.NotFound => EnrollmentError.StudentNotFound(studentId),
+            StudentEnrollmentEligibility.Inactive => EnrollmentError.StudentInactive(studentId),
+            _ => null,
+        };
+
+        if (error is not null)
+        {
+            throw new EnrollmentRejectedException(error);
+        }
     }
 }
