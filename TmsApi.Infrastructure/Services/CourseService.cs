@@ -65,7 +65,7 @@ public class CourseService(TmsDbContext context, ILogger<CourseService> logger) 
                 c.Code,
                 c.Title,
                 c.MaxCapacity,
-                c.Enrollments.Count
+                c.Enrollments.Count(e => e.Status == TmsApi.Domain.Enums.EnrollmentStatus.Pending || e.Status == TmsApi.Domain.Enums.EnrollmentStatus.Approved)
             ))
             .ToListAsync(ct);
 
@@ -89,7 +89,7 @@ public class CourseService(TmsDbContext context, ILogger<CourseService> logger) 
                 c.Code,
                 c.Title,
                 c.MaxCapacity,
-                c.Enrollments.Count
+                c.Enrollments.Count(e => e.Status == TmsApi.Domain.Enums.EnrollmentStatus.Pending || e.Status == TmsApi.Domain.Enums.EnrollmentStatus.Approved)
             ))
             .FirstOrDefaultAsync(ct);
     }
@@ -119,7 +119,7 @@ public class CourseService(TmsDbContext context, ILogger<CourseService> logger) 
         return (await GetByIdAsync(course.Id, ct))!;
     }
 
-    public async Task<Course?> UpdateAsync(Course course, CancellationToken ct)
+    public async Task<Course> UpdateAsync(Course course, CancellationToken ct)
     {
         context.Courses.Update(course);
         await context.SaveChangesAsync(ct);

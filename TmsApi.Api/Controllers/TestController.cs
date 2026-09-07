@@ -4,6 +4,7 @@ using TmsApi.Infrastructure.Persistence;
 
 namespace TmsApi.Api.Controllers;
 
+[NonController]
 [ApiController]
 [Route("api/test")]
 public class TestController(TmsDbContext context) : ControllerBase

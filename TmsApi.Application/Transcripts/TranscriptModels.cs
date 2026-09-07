@@ -8,7 +8,7 @@ public enum TranscriptState
     Failed,
 }
 
-public record TranscriptRequest(int StudentId, string? ReportId = null)
+public record TranscriptRequest([System.ComponentModel.DataAnnotations.Range(1, int.MaxValue)] int StudentId, string? ReportId = null)
 {
     public TranscriptRequest WithReportId(string id) => this with { ReportId = id };
 }

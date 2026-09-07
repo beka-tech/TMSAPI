@@ -9,6 +9,8 @@ public sealed class GetStudentScheduleHandler(IEnrollmentService enrollmentServi
 {
     public async Task<ScheduleDto> Handle(GetStudentScheduleQuery query, CancellationToken ct)
     {
+        if (await enrollmentService.GetStudentEligibilityAsync(query.StudentId, ct) == TmsApi.Application.Common.StudentEnrollmentEligibility.NotFound)
+            throw new TmsApi.Application.Common.ResourceNotFoundException("Student not found.");
         var enrollments = await enrollmentService.GetByStudentIdAsync(query.StudentId, ct);
 
         var items = enrollments

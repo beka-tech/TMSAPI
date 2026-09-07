@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using TmsApi.Domain;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Npgsql;
@@ -47,12 +48,26 @@ public class EnrollmentService(
 
     public async Task AddAsync(Enrollment enrollment, CancellationToken ct)
     {
+        await using var transaction = await context.Database.BeginTransactionAsync(ct);
+        var course = await context.Courses.FromSqlInterpolated(
+            $"SELECT * FROM \"Courses\" WHERE \"Id\" = {enrollment.CourseId} FOR UPDATE")
+            .SingleOrDefaultAsync(ct);
+        if (course is null)
+            throw new EnrollmentRejectedException(EnrollmentError.CourseNotFound($"course {enrollment.CourseId}"));
         await EnsureStudentCanEnrollAsync(enrollment.StudentId, ct);
+        if (await context.Enrollments.AnyAsync(e => e.StudentId == enrollment.StudentId && e.CourseId == enrollment.CourseId, ct))
+            throw new EnrollmentRejectedException(EnrollmentError.AlreadyEnrolled(enrollment.StudentId, course.Code));
+        var seats = await context.Enrollments.CountAsync(e => e.CourseId == course.Id &&
+            (e.Status == EnrollmentStatus.Pending || e.Status == EnrollmentStatus.Approved), ct);
+        if (seats >= course.MaxCapacity)
+            throw new EnrollmentRejectedException(EnrollmentError.CourseFull(course.Title, course.MaxCapacity));
+        enrollment.Status = EnrollmentStatus.Pending;
         context.Enrollments.Add(enrollment);
 
         try
         {
             await context.SaveChangesAsync(ct);
+            await transaction.CommitAsync(ct);
         }
         catch (DbUpdateException exception) when (IsDuplicateEnrollmentViolation(exception))
         {
@@ -65,11 +80,16 @@ public class EnrollmentService(
         }
     }
 
-    public async Task<IReadOnlyList<EnrollmentResponseDto>> GetAllAsync(CancellationToken ct)
+    public async Task<IReadOnlyList<EnrollmentResponseDto>> GetAllAsync(CancellationToken ct, int page = 1, int pageSize = 20, int? studentId = null, int? courseId = null, EnrollmentStatus? status = null)
     {
         return await context
             .Enrollments.AsNoTracking()
-            .OrderByDescending(e => e.EnrolledAt)
+            .Where(e => (!studentId.HasValue || e.StudentId == studentId.Value)
+                && (!courseId.HasValue || e.CourseId == courseId.Value)
+                && (!status.HasValue || e.Status == status.Value))
+            .OrderByDescending(e => e.EnrolledAt).ThenByDescending(e => e.Id)
+            .Skip((Math.Clamp(page, 1, 1000000) - 1) * Math.Clamp(pageSize, 1, 50))
+            .Take(Math.Clamp(pageSize, 1, 50))
             .Select(e => new EnrollmentResponseDto(
                 e.Id,
                 e.StudentId,
@@ -139,49 +159,12 @@ public class EnrollmentService(
         CancellationToken ct
     )
     {
-        await EnsureStudentCanEnrollAsync(request.StudentId, ct);
-
-        var alreadyEnrolled = await context.Enrollments.AnyAsync(
-            e => e.StudentId == request.StudentId && e.CourseId == courseId,
-            ct
-        );
-
-        if (alreadyEnrolled)
-        {
-            var courseCode = await context
-                .Courses.AsNoTracking()
-                .Where(c => c.Id == courseId)
-                .Select(c => c.Code)
-                .FirstOrDefaultAsync(ct);
-
-            throw new EnrollmentRejectedException(
-                EnrollmentError.AlreadyEnrolled(
-                    request.StudentId,
-                    courseCode ?? $"course {courseId}"
-                )
-            );
-        }
-
         var enrollment = new Enrollment
         {
-            CourseId = courseId,
-            StudentId = request.StudentId,
-            EnrolledAt = DateTime.UtcNow,
-            Status = EnrollmentStatus.Pending,
+            CourseId = courseId, StudentId = request.StudentId,
+            EnrolledAt = DateTime.UtcNow, Status = EnrollmentStatus.Pending,
         };
-
-        context.Enrollments.Add(enrollment);
-
-        try
-        {
-            await context.SaveChangesAsync(ct);
-        }
-        catch (DbUpdateException exception) when (IsDuplicateEnrollmentViolation(exception))
-        {
-            throw new EnrollmentRejectedException(
-                EnrollmentError.AlreadyEnrolled(request.StudentId, $"course {courseId}")
-            );
-        }
+        await AddAsync(enrollment, ct);
 
         logger.LogInformation(
             "Enrollment {EnrollmentId} created for student {StudentId} "
@@ -243,9 +226,19 @@ public class EnrollmentService(
             return false;
         }
 
+        if (!EnrollmentRules.CanTransition(enrollment.Status, status))
+            throw new ResourceConflictException($"Cannot change enrollment from {enrollment.Status} to {status}.");
         enrollment.Status = status;
         await context.SaveChangesAsync(ct);
-        await enrollmentStatusNotifier.EnrollmentStatusUpdatedAsync(enrollmentId, status, ct);
+        try
+        {
+            await enrollmentStatusNotifier.EnrollmentStatusUpdatedAsync(enrollmentId, status, ct);
+        }
+        catch (Exception ex)
+        {
+            // The committed update remains successful; clients can fetch current status.
+            logger.LogWarning(ex, "Status notification failed for enrollment {EnrollmentId}", enrollmentId);
+        }
 
         logger.LogInformation(
             "Enrollment {EnrollmentId} status changed to {Status}",
@@ -273,6 +266,8 @@ public class EnrollmentService(
             return false;
         }
 
+        if (enrollment.Status != EnrollmentStatus.Approved)
+            throw new ResourceConflictException("Grades can only be changed while an enrollment is approved.");
         enrollment.Grade = grade;
         await context.SaveChangesAsync(ct);
 
@@ -289,7 +284,7 @@ public class EnrollmentService(
     {
         if (!await UpdateStatusAsync(enrollmentId, EnrollmentStatus.Approved, ct))
         {
-            throw new InvalidOperationException($"Enrollment {enrollmentId} was not found.");
+            throw new ResourceNotFoundException($"Enrollment {enrollmentId} was not found.");
         }
     }
 
@@ -297,7 +292,7 @@ public class EnrollmentService(
     {
         if (!await UpdateStatusAsync(enrollmentId, EnrollmentStatus.Rejected, ct))
         {
-            throw new InvalidOperationException($"Enrollment {enrollmentId} was not found.");
+            throw new ResourceNotFoundException($"Enrollment {enrollmentId} was not found.");
         }
     }
 

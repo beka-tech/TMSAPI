@@ -8,7 +8,7 @@ using TmsApi.Infrastructure.Persistence;
 
 namespace TmsApi.Api.Controllers.V2;
 
-[Authorize(Roles = "Instructor,Admin")]
+[Authorize]
 [ApiController]
 [Route("api/v{version:apiVersion}/courses")]
 [ApiVersion("2.0")]
@@ -77,7 +77,6 @@ public class CourseControllers(
         {
             new(selfPath, "self", "GET"),
             new(selfPath, "update", "PUT"),
-            new(selfPath, "delete", "DELETE"),
             new(enrollmentsPath, "enrollments", "GET"),
         };
 
@@ -103,6 +102,7 @@ public class CourseControllers(
     // POST: api/courses
     // ============================================================
 
+    [Authorize(Roles = "Admin")]
     [HttpPost]
     [ProducesResponseType(typeof(CourseResponseDto), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
@@ -135,6 +135,7 @@ public class CourseControllers(
     // Resource-based authorization
     // ============================================================
 
+    [Authorize(Roles = "Instructor,Admin")]
     [HttpPut("{id:int}")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
@@ -167,7 +168,7 @@ public class CourseControllers(
             return Forbid();
         }
 
-        // 4. Authorized → modify resource
+        // 4. Authorized â†’ modify resource
         course.Title = dto.Title;
 
         await _context.SaveChangesAsync(ct);

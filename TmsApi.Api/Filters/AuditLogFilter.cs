@@ -1,21 +1,20 @@
+using System.Security.Claims;
 using Microsoft.AspNetCore.Mvc.Filters;
 
 namespace TmsApi.Api.Filters;
 
-public class AuditLogFilter(ILogger<AuditLogFilter> logger) : IActionFilter
+public class AuditLogFilter(ILogger<AuditLogFilter> logger) : IAsyncResultFilter
 {
-    public void OnActionExecuting(ActionExecutingContext context)
+    public async Task OnResultExecutionAsync(ResultExecutingContext context, ResultExecutionDelegate next)
     {
-        var route = context.HttpContext.Request.Path;
-        var method = context.HttpContext.Request.Method;
-
-        logger.LogInformation("TMS API call: {Method} {Route}", method, route);
-    }
-
-    public void OnActionExecuted(ActionExecutedContext context)
-    {
-        var statusCode = context.HttpContext.Response.StatusCode;
-
-        logger.LogInformation("TMS API response: {StatusCode}", statusCode);
+        try { await next(); }
+        finally
+        {
+            logger.LogInformation("API {Method} {Path} returned {StatusCode} for {ActorId} (trace {TraceId})",
+                context.HttpContext.Request.Method, context.HttpContext.Request.Path,
+                context.HttpContext.Response.StatusCode,
+                context.HttpContext.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "anonymous",
+                context.HttpContext.TraceIdentifier);
+        }
     }
 }

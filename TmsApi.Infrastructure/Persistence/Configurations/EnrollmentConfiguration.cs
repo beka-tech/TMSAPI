@@ -30,7 +30,7 @@ public class EnrollmentConfiguration : IEntityTypeConfiguration<Enrollment>
 
         builder
             .Property(e => e.Status)
-            .HasColumnType("enrollment_status")
+            .HasColumnType("public.enrollment_status")
             .HasDefaultValue(EnrollmentStatus.Pending)
             .IsRequired();
     }

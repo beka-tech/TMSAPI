@@ -1,3 +1,7 @@
+using Microsoft.AspNetCore.DataProtection;
+using System.Security.Claims;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using TmsApi.Api.Health;
 using System.Text;
 using System.Text.Json.Serialization;
 using System.Threading.Channels;
@@ -44,6 +48,8 @@ using TmsApi.Infrastructure.Workers;
 var builder = WebApplication.CreateBuilder(args);
 
 var npgsqlNameTranslator = new NpgsqlNullNameTranslator();
+if (builder.Configuration["DataProtection:KeyPath"] is string keyPath)
+    builder.Services.AddDataProtection().PersistKeysToFileSystem(new DirectoryInfo(keyPath));
 
 // ============================================================================
 // DEPENDENCY INJECTION VALIDATION
@@ -60,6 +66,11 @@ builder.Host.UseDefaultServiceProvider(options =>
 // ============================================================================
 
 builder.Services.AddSignalR();
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<IAuditActor, HttpAuditActor>();
+builder.Services.AddScoped<TmsAccess>();
+builder.Services.AddScoped<StudentAccessFilter>();
+builder.Services.AddScoped<EnrollmentAccessFilter>();
 
 // ============================================================================
 // CQRS + MEDIATR
@@ -99,29 +110,14 @@ builder
     });
 
 // ============================================================================
-// ANTIFORGERY / XSRF
-// ============================================================================
-
-builder.Services.AddAntiforgery(options =>
-{
-    options.HeaderName = "X-XSRF-TOKEN";
-});
-
-// ============================================================================
 // RATE LIMITING
 // ============================================================================
 
 builder.Services.AddRateLimiter(options =>
 {
-    options.AddFixedWindowLimiter(
-        "AuthLimiter",
-        options =>
-        {
-            options.PermitLimit = 5;
-            options.Window = TimeSpan.FromMinutes(1);
-            options.QueueLimit = 0;
-        }
-    );
+    options.AddPolicy("AuthLimiter", context => RateLimitPartition.GetFixedWindowLimiter(
+        context.Connection.RemoteIpAddress?.ToString() ?? "anonymous",
+        _ => new FixedWindowRateLimiterOptions { PermitLimit = 5, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
 
     // ------------------------------------------------------------------------
     // GLOBAL RATE LIMITER
@@ -311,24 +307,18 @@ builder.Services.AddScoped<ICachedCourseService, CachedCourseService>();
 // TRANSCRIPT STATUS STORE
 // ============================================================================
 
-builder.Services.AddSingleton<ITranscriptStatusStore, InMemoryTranscriptStatusStore>();
+builder.Services.AddScoped<ITranscriptStatusStore, DatabaseTranscriptStatusStore>();
 
 // ============================================================================
 // TRANSCRIPT CHANNEL
 // ============================================================================
-
-builder.Services.AddSingleton(
-    Channel.CreateBounded<TranscriptRequest>(
-        new BoundedChannelOptions(100) { FullMode = BoundedChannelFullMode.Wait }
-    )
-);
 
 // ============================================================================
 // SIGNALR TRANSCRIPT NOTIFIER
 // ============================================================================
 
 builder.Services.AddSingleton<ITranscriptNotifier, SignalRTranscriptNotifier>();
-builder.Services.AddSingleton<IEnrollmentStatusNotifier, SignalREnrollmentStatusNotifier>();
+builder.Services.AddScoped<IEnrollmentStatusNotifier, SignalREnrollmentStatusNotifier>();
 
 // ============================================================================
 // BACKGROUND WORKER
@@ -399,7 +389,7 @@ builder.Services.AddHybridCache(options =>
 // HEALTH CHECKS
 // ============================================================================
 
-builder.Services.AddHealthChecks();
+builder.Services.AddHealthChecks().AddCheck<DatabaseHealthCheck>("database", tags: ["ready"]);
 
 // ============================================================================
 // DATABASE
@@ -494,19 +484,14 @@ builder
 // [Authorize]
 //
 
-builder.Services.AddAuthorization();
+builder.Services.AddAuthorization(options =>
+    options.FallbackPolicy = new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build());
 
 // ============================================================================
 // OPTIONS
 // ============================================================================
 
-builder
-    .Services.AddAuthorizationBuilder()
-    .AddPolicy(
-        "CanEditCourse",
-        policy => policy.Requirements.Add(new CourseInstructorRequirement())
-    );
-builder.Services.AddSingleton<IAuthorizationHandler, CourseInstructorHandler>();
+
 
 builder
     .Services.AddOptions<PaymentOptions>()
@@ -523,6 +508,23 @@ builder
     })
     .AddJwtBearer(options =>
     {
+        options.Events = new JwtBearerEvents
+        {
+            OnMessageReceived = context =>
+            {
+                if (context.Request.Path.StartsWithSegments("/hubs/tms"))
+                    context.Token = context.Request.Query["access_token"];
+                return Task.CompletedTask;
+            },
+            OnTokenValidated = async context =>
+            {
+                var userManager = context.HttpContext.RequestServices.GetRequiredService<UserManager<TmsUser>>();
+                var user = await userManager.FindByIdAsync(context.Principal!.FindFirstValue(ClaimTypes.NameIdentifier)!);
+                if (user is null || await userManager.IsLockedOutAsync(user) ||
+                    string.IsNullOrEmpty(user.SecurityStamp) || user.SecurityStamp != context.Principal!.FindFirstValue("security_stamp"))
+                    context.Fail("Session is no longer valid.");
+            }
+        };
         options.TokenValidationParameters = new TokenValidationParameters
         {
             ValidateIssuer = true,
@@ -558,7 +560,7 @@ var app = builder.Build();
 app.UseExceptionHandler();
 
 // ============================================================================
-// STATUS CODE → PROBLEM DETAILS
+// STATUS CODE Ã¢â€ â€™ PROBLEM DETAILS
 // ============================================================================
 
 app.UseStatusCodePages();
@@ -628,46 +630,6 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 // ============================================================================
-// XSRF TOKEN COOKIE
-// ============================================================================
-
-app.Use(
-    async (context, next) =>
-    {
-        if (
-            context.User.Identity?.IsAuthenticated == true
-            || context.Request.Cookies.ContainsKey("tms_auth")
-        )
-        {
-            var antiforgery = context.RequestServices.GetRequiredService<IAntiforgery>();
-
-            var tokens = antiforgery.GetAndStoreTokens(context);
-
-            if (tokens.RequestToken is not null)
-            {
-                context.Response.Cookies.Append(
-                    "XSRF-TOKEN",
-                    tokens.RequestToken,
-                    new CookieOptions
-                    {
-                        // Angular JavaScript must
-                        // be able to read this token.
-                        HttpOnly = false,
-
-                        // HTTP is currently used in development.
-                        Secure = !app.Environment.IsDevelopment(),
-
-                        SameSite = SameSiteMode.Strict,
-                    }
-                );
-            }
-        }
-
-        await next(context);
-    }
-);
-
-// ============================================================================
 // CUSTOM API VERSION DEPRECATION MIDDLEWARE
 // ============================================================================
 
@@ -679,7 +641,7 @@ app.UseMiddleware<V1DeprecationMiddleware>();
 
 if (app.Environment.IsDevelopment())
 {
-    app.MapOpenApi();
+    app.MapOpenApi().AllowAnonymous();
 
     app.MapScalarApiReference(options =>
     {
@@ -689,16 +651,16 @@ if (app.Environment.IsDevelopment())
             .WithDefaultHttpClient(ScalarTarget.CSharp, ScalarClient.HttpClient)
             .AddDocument("v1", "API Version 1.0")
             .AddDocument("v2", "API Version 2.0");
-    });
+    }).AllowAnonymous();
 }
 
 // ============================================================================
 // HEALTH CHECK ENDPOINTS
 // ============================================================================
 
-app.MapHealthChecks("/health/live").DisableRateLimiting();
+app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = _ => false }).AllowAnonymous().DisableRateLimiting();
 
-app.MapHealthChecks("/health/ready").DisableRateLimiting();
+app.MapHealthChecks("/health/ready", new HealthCheckOptions { Predicate = check => check.Tags.Contains("ready") }).AllowAnonymous().DisableRateLimiting();
 
 // ============================================================================
 // SIGNALR HUB
@@ -714,7 +676,7 @@ app.MapHealthChecks("/health/ready").DisableRateLimiting();
 // /hubs/** -> http://localhost:5150
 //
 
-app.MapHub<TmsHub>("/hubs/tms");
+app.MapHub<TmsHub>("/hubs/tms", options => options.CloseOnAuthenticationExpiration = true);
 
 // ============================================================================
 // CONTROLLERS
@@ -727,3 +689,5 @@ app.MapControllers();
 // ============================================================================
 
 app.Run();
+
+public partial class Program { }

@@ -1,3 +1,5 @@
+using Microsoft.AspNetCore.Authorization;
+using TmsApi.Api.Authorization;
 using Asp.Versioning;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
@@ -13,6 +15,8 @@ using TmsApi.Application.Interfaces;
 
 namespace TmsApi.Api.Controllers.V2;
 
+[Authorize]
+[ServiceFilter(typeof(EnrollmentAccessFilter))]
 [ApiController]
 [Route("api/v{version:apiVersion}/enrollments")]
 [ApiVersion("2.0")]
@@ -76,7 +80,7 @@ public class EnrollmentsController(IMediator mediator, IEnrollmentService enroll
     [EndpointDescription("Retrieves all enrollment records for a specific student.")]
     [ProducesResponseType(typeof(IReadOnlyList<EnrollmentResponseDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetByStudent(int studentId, CancellationToken ct)
+    public async Task<IActionResult> GetByStudent(int studentId, CancellationToken ct, [FromQuery] int page = 1, [FromQuery] int pageSize = 20)
     {
         var eligibility = await enrollmentService.GetStudentEligibilityAsync(studentId, ct);
 
@@ -93,7 +97,7 @@ public class EnrollmentsController(IMediator mediator, IEnrollmentService enroll
             );
         }
 
-        var enrollments = await enrollmentService.GetByStudentIdAsync(studentId, ct);
+        var enrollments = await enrollmentService.GetAllAsync(ct, page, pageSize, studentId: studentId);
 
         return Ok(enrollments);
     }
@@ -122,11 +126,12 @@ public class EnrollmentsController(IMediator mediator, IEnrollmentService enroll
 
     [HttpGet]
     [EndpointSummary("Get all enrollments")]
-    [EndpointDescription("Returns a complete list of all student enrollments across all courses.")]
-    [ProducesResponseType(typeof(IReadOnlyList<EnrollmentDto>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetAll(CancellationToken ct)
+    [EndpointDescription("Returns a paginated list of enrollments, optionally filtered by student, course, and status.")]
+    [ProducesResponseType(typeof(IReadOnlyList<EnrollmentListDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetAll(CancellationToken ct, [FromQuery] int page = 1, [FromQuery] int pageSize = 20,
+        [FromQuery] int? studentId = null, [FromQuery] int? courseId = null, [FromQuery] TmsApi.Domain.Enums.EnrollmentStatus? status = null)
     {
-        var enrollments = await mediator.Send(new GetAllEnrollmentsQuery(), ct);
+        var enrollments = await mediator.Send(new GetAllEnrollmentsQuery(page, pageSize, studentId, courseId, status), ct);
 
         return Ok(enrollments);
     }
@@ -138,7 +143,7 @@ public class EnrollmentsController(IMediator mediator, IEnrollmentService enroll
     [HttpPatch("{id:int}/status")]
     [EndpointSummary("Update enrollment status")]
     [EndpointDescription(
-        "Updates the status of an enrollment such as Pending, Approved, Rejected, Completed, or Dropped."
+        "Updates the status of an enrollment such as Pending, Approved, Rejected, or Completed."
     )]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
