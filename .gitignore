@@ -6,5 +6,3 @@ obj/
 appsettings.Development.json
 appsettings.Local.json
 *.log
-.test-postgres/
-TestResults/

@@ -1,14 +1,16 @@
 using TmsApi.Application.Transcripts;
-using TmsApi.Domain.Entities;
 
 namespace TmsApi.Infrastructure.Transcripts;
 
 public interface ITranscriptStatusStore
 {
-    Task<TranscriptJob> RequestAsync(int studentId, string requestedBy, string? idempotencyKey, CancellationToken ct);
-    Task<TranscriptJob?> GetJobAsync(string reportId, CancellationToken ct);
-    Task<bool> ProcessNextAsync(CancellationToken ct);
-    static TranscriptStatus Status(TranscriptJob job) => new(job.Id, job.StudentId,
-        Enum.Parse<TranscriptState>(job.State), job.RequestedAt, job.StartedAt, job.CompletedAt,
-        job.State == "Ready" ? $"/api/v2/transcripts/{job.Id}/download" : null, job.ErrorMessage);
+    Task<TranscriptStatus> CreateAsync(string reportId, int studentId, CancellationToken ct);
+    Task MarkProcessingAsync(string reportId, CancellationToken ct);
+    Task MarkReadyAsync(string reportId, string downloadUrl, CancellationToken ct);
+    Task MarkFailedAsync(string reportId, string error, CancellationToken ct);
+    Task<TranscriptStatus?> GetAsync(string reportId, CancellationToken ct);
+
+    // Idempotency
+    Task<string?> GetReportIdForIdempotencyKeyAsync(string idempotencyKey, CancellationToken ct);
+    Task LinkIdempotencyKeyAsync(string idempotencyKey, string reportId, CancellationToken ct);
 }

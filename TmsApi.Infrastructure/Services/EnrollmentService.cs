@@ -48,10 +48,7 @@ public class EnrollmentService(
 
     public async Task AddAsync(Enrollment enrollment, CancellationToken ct)
     {
-        await using var transaction = await context.Database.BeginTransactionAsync(ct);
-        var course = await context.Courses.FromSqlInterpolated(
-            $"SELECT * FROM \"Courses\" WHERE \"Id\" = {enrollment.CourseId} FOR UPDATE")
-            .SingleOrDefaultAsync(ct);
+        var course = await context.Courses.SingleOrDefaultAsync(c => c.Id == enrollment.CourseId, ct);
         if (course is null)
             throw new EnrollmentRejectedException(EnrollmentError.CourseNotFound($"course {enrollment.CourseId}"));
         await EnsureStudentCanEnrollAsync(enrollment.StudentId, ct);
@@ -67,7 +64,6 @@ public class EnrollmentService(
         try
         {
             await context.SaveChangesAsync(ct);
-            await transaction.CommitAsync(ct);
         }
         catch (DbUpdateException exception) when (IsDuplicateEnrollmentViolation(exception))
         {
@@ -80,16 +76,11 @@ public class EnrollmentService(
         }
     }
 
-    public async Task<IReadOnlyList<EnrollmentResponseDto>> GetAllAsync(CancellationToken ct, int page = 1, int pageSize = 20, int? studentId = null, int? courseId = null, EnrollmentStatus? status = null)
+    public async Task<IReadOnlyList<EnrollmentResponseDto>> GetAllAsync(CancellationToken ct)
     {
         return await context
             .Enrollments.AsNoTracking()
-            .Where(e => (!studentId.HasValue || e.StudentId == studentId.Value)
-                && (!courseId.HasValue || e.CourseId == courseId.Value)
-                && (!status.HasValue || e.Status == status.Value))
-            .OrderByDescending(e => e.EnrolledAt).ThenByDescending(e => e.Id)
-            .Skip((Math.Clamp(page, 1, 1000000) - 1) * Math.Clamp(pageSize, 1, 50))
-            .Take(Math.Clamp(pageSize, 1, 50))
+            .OrderByDescending(e => e.EnrolledAt)
             .Select(e => new EnrollmentResponseDto(
                 e.Id,
                 e.StudentId,
@@ -230,15 +221,7 @@ public class EnrollmentService(
             throw new ResourceConflictException($"Cannot change enrollment from {enrollment.Status} to {status}.");
         enrollment.Status = status;
         await context.SaveChangesAsync(ct);
-        try
-        {
-            await enrollmentStatusNotifier.EnrollmentStatusUpdatedAsync(enrollmentId, status, ct);
-        }
-        catch (Exception ex)
-        {
-            // The committed update remains successful; clients can fetch current status.
-            logger.LogWarning(ex, "Status notification failed for enrollment {EnrollmentId}", enrollmentId);
-        }
+        await enrollmentStatusNotifier.EnrollmentStatusUpdatedAsync(enrollmentId, status, ct);
 
         logger.LogInformation(
             "Enrollment {EnrollmentId} status changed to {Status}",

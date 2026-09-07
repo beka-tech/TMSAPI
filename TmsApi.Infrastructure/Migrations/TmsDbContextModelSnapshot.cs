@@ -184,44 +184,6 @@ namespace TMSAPI.Migrations
                     b.ToTable("Assessments");
                 });
 
-            modelBuilder.Entity("TmsApi.Domain.Entities.AuditEntry", b =>
-                {
-                    b.Property<long>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
-
-                    b.Property<string>("Action")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("ActorId")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("Changes")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("EntityId")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("EntityType")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<DateTime>("OccurredAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("OccurredAt");
-
-                    b.ToTable("AuditEntries");
-                });
-
             modelBuilder.Entity("TmsApi.Domain.Entities.Certificate", b =>
                 {
                     b.Property<int>("Id")
@@ -262,10 +224,6 @@ namespace TMSAPI.Migrations
 
                     b.Property<string>("Code")
                         .IsRequired()
-                        .HasMaxLength(10)
-                        .HasColumnType("character varying(10)");
-
-                    b.Property<string>("InstructorId")
                         .HasColumnType("text");
 
                     b.Property<int>("MaxCapacity")
@@ -273,15 +231,9 @@ namespace TMSAPI.Migrations
 
                     b.Property<string>("Title")
                         .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
+                        .HasColumnType("text");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("Code")
-                        .IsUnique();
-
-                    b.HasIndex("InstructorId");
 
                     b.ToTable("Courses");
                 });
@@ -301,14 +253,10 @@ namespace TMSAPI.Migrations
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<decimal?>("Grade")
-                        .IsConcurrencyToken()
                         .HasColumnType("numeric");
 
                     b.Property<EnrollmentStatus>("Status")
-                        .IsConcurrencyToken()
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("public.enrollment_status")
-                        .HasDefaultValue(EnrollmentStatus.Pending);
+                        .HasColumnType("public.enrollment_status");
 
                     b.Property<int>("StudentId")
                         .HasColumnType("integer");
@@ -338,7 +286,6 @@ namespace TMSAPI.Migrations
                         .HasColumnType("boolean");
 
                     b.Property<bool>("IsUsed")
-                        .IsConcurrencyToken()
                         .HasColumnType("boolean");
 
                     b.Property<string>("Token")
@@ -350,11 +297,6 @@ namespace TMSAPI.Migrations
                         .HasColumnType("text");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("Token")
-                        .IsUnique();
-
-                    b.HasIndex("UserId");
 
                     b.ToTable("RefreshTokens");
                 });
@@ -399,50 +341,6 @@ namespace TMSAPI.Migrations
                         .IsUnique();
 
                     b.ToTable("Students");
-                });
-
-            modelBuilder.Entity("TmsApi.Domain.Entities.TranscriptJob", b =>
-                {
-                    b.Property<string>("Id")
-                        .HasColumnType("text");
-
-                    b.Property<DateTime?>("CompletedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Content")
-                        .HasColumnType("text");
-
-                    b.Property<string>("ErrorMessage")
-                        .HasColumnType("text");
-
-                    b.Property<string>("IdempotencyKey")
-                        .HasColumnType("text");
-
-                    b.Property<DateTime>("RequestedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("RequestedBy")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<DateTime?>("StartedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("State")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<int>("StudentId")
-                        .HasColumnType("integer");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("RequestedBy", "IdempotencyKey")
-                        .IsUnique();
-
-                    b.HasIndex("State", "RequestedAt");
-
-                    b.ToTable("TranscriptJobs");
                 });
 
             modelBuilder.Entity("TmsApi.Infrastructure.Identity.TmsUser", b =>
@@ -501,9 +399,6 @@ namespace TMSAPI.Migrations
                     b.Property<string>("SecurityStamp")
                         .HasColumnType("text");
 
-                    b.Property<int?>("StudentId")
-                        .HasColumnType("integer");
-
                     b.Property<bool>("TwoFactorEnabled")
                         .HasColumnType("boolean");
 
@@ -519,9 +414,6 @@ namespace TMSAPI.Migrations
                     b.HasIndex("NormalizedUserName")
                         .IsUnique()
                         .HasDatabaseName("UserNameIndex");
-
-                    b.HasIndex("StudentId")
-                        .IsUnique();
 
                     b.ToTable("AspNetUsers", (string)null);
                 });
@@ -607,39 +499,23 @@ namespace TMSAPI.Migrations
                     b.Navigation("Student");
                 });
 
-            modelBuilder.Entity("TmsApi.Domain.Entities.Course", b =>
-                {
-                    b.HasOne("TmsApi.Infrastructure.Identity.TmsUser", null)
-                        .WithMany()
-                        .HasForeignKey("InstructorId")
-                        .OnDelete(DeleteBehavior.Restrict);
-                });
-
             modelBuilder.Entity("TmsApi.Domain.Entities.Enrollment", b =>
                 {
                     b.HasOne("TmsApi.Domain.Entities.Course", "Course")
                         .WithMany("Enrollments")
                         .HasForeignKey("CourseId")
-                        .OnDelete(DeleteBehavior.Restrict)
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
                     b.HasOne("TmsApi.Domain.Entities.Student", "Student")
                         .WithMany("Enrollments")
                         .HasForeignKey("StudentId")
-                        .OnDelete(DeleteBehavior.Restrict)
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
                     b.Navigation("Course");
 
                     b.Navigation("Student");
-                });
-
-            modelBuilder.Entity("TmsApi.Infrastructure.Identity.TmsUser", b =>
-                {
-                    b.HasOne("TmsApi.Domain.Entities.Student", null)
-                        .WithOne()
-                        .HasForeignKey("TmsApi.Infrastructure.Identity.TmsUser", "StudentId")
-                        .OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("TmsApi.Domain.Entities.Course", b =>

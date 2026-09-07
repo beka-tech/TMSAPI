@@ -1,5 +1,3 @@
-using Microsoft.AspNetCore.Authorization;
-using TmsApi.Api.Authorization;
 using Asp.Versioning;
 using Microsoft.AspNetCore.Mvc;
 using TmsApi.Api.Hubs;
@@ -10,8 +8,6 @@ using TmsApi.Application.Interfaces;
 
 namespace TmsApi.Api.Controllers;
 
-[Authorize]
-[ServiceFilter(typeof(EnrollmentAccessFilter))]
 [ApiController]
 [Route("api/courses/{courseId:int}/enrollments")]
 // [Route("api/enrollments")]
@@ -29,14 +25,14 @@ public class EnrollmentsController(
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     [EndpointSummary("List enrolments for a course")]
     [EndpointDescription("Returns all enrolments for the specified course.")]
-    public async Task<IActionResult> GetEnrollments(int courseId, CancellationToken ct, [FromQuery] int page = 1, [FromQuery] int pageSize = 20)
+    public async Task<IActionResult> GetEnrollments(int courseId, CancellationToken ct)
     {
         var course = await courseService.GetByIdAsync(courseId, ct);
 
         if (course is null)
             return NotFound();
 
-        var enrollments = await enrollmentService.GetAllAsync(ct, page, pageSize, courseId: courseId);
+        var enrollments = await enrollmentService.GetByCourseAsync(courseId, ct);
         return Ok(enrollments);
     }
 

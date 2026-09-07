@@ -21,7 +21,6 @@ public class TokenService
         var claims = new List<Claim>
         {
             new Claim(ClaimTypes.NameIdentifier, user.Id),
-            new Claim("security_stamp", user.SecurityStamp ?? ""),
             new Claim(ClaimTypes.Email, user.Email ?? string.Empty),
             new Claim("FirstName", user.FirstName),
         };

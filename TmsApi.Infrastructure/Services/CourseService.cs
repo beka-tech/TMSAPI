@@ -119,7 +119,7 @@ public class CourseService(TmsDbContext context, ILogger<CourseService> logger) 
         return (await GetByIdAsync(course.Id, ct))!;
     }
 
-    public async Task<Course> UpdateAsync(Course course, CancellationToken ct)
+    public async Task<Course?> UpdateAsync(Course course, CancellationToken ct)
     {
         context.Courses.Update(course);
         await context.SaveChangesAsync(ct);
