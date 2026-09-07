@@ -58,12 +58,6 @@ public class GlobalExceptionHandler(ILogger<GlobalExceptionHandler> logger) : IE
             ResourceConflictException conflict => (
                 409, "Conflict", conflict.Message, "https://tms.local/errors/conflict", null
             ),
-            Microsoft.EntityFrameworkCore.DbUpdateConcurrencyException => (
-                409, "Conflict", "The record changed. Reload it and retry.", "https://tms.local/errors/concurrency", null
-            ),
-            Microsoft.EntityFrameworkCore.DbUpdateException db when db.InnerException is Npgsql.PostgresException { SqlState: "23505" } => (
-                409, "Conflict", "A record with the same unique value already exists.", "https://tms.local/errors/duplicate", null
-            ),
             _ => (
                 StatusCodes.Status500InternalServerError,
                 "Server error",

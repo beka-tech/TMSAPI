@@ -12,7 +12,7 @@ public class GetAllEnrollmentsQueryHandler(IEnrollmentService enrollmentService)
         CancellationToken ct
     )
     {
-        var enrollments = await enrollmentService.GetAllAsync(ct, request.Page, request.PageSize, request.StudentId, request.CourseId, request.Status);
+        var enrollments = await enrollmentService.GetAllAsync(ct);
 
         return enrollments
             .Select(e => new EnrollmentListDto(

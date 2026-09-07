@@ -1,5 +1,3 @@
-using Microsoft.AspNetCore.Authorization;
-using TmsApi.Api.Authorization;
 using Asp.Versioning;
 using Microsoft.AspNetCore.Mvc;
 using TmsApi.Application.Common;
@@ -9,8 +7,6 @@ using TmsApi.Domain.Entities;
 
 namespace TmsApi.Api.Controllers.V1;
 
-[Authorize]
-[ServiceFilter(typeof(StudentAccessFilter))]
 [ApiController]
 [ApiVersion("1.0")]
 [Route("api/v{version:apiVersion}/students")]
