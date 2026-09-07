@@ -2,7 +2,7 @@ namespace TmsApi.Domain.Entities;
 
 public class Course
 {
-    public readonly string? InstructorId;
+    public string? InstructorId { get; set; }
 
     public int Id { get; set; }
     public required string Code { get; set; }

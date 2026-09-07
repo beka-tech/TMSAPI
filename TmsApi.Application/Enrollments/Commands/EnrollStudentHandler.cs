@@ -36,7 +36,7 @@ public class EnrollStudentHandler(
             return Result<EnrollmentCreated, EnrollmentError>.Failure(
                 EnrollmentError.AlreadyEnrolled(command.StudentId, command.CourseCode)
             );
-        if (course.Enrollments.Count >= course.MaxCapacity)
+        if (course.Enrollments.Count(e => TmsApi.Domain.EnrollmentRules.OccupiesSeat(e.Status)) >= course.MaxCapacity)
             return Result<EnrollmentCreated, EnrollmentError>.Failure(
                 EnrollmentError.CourseFull(course.Title, course.MaxCapacity)
             );

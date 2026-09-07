@@ -1,0 +1,46 @@
+name: Build and test
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: tms_test
+          POSTGRES_PASSWORD: test-only-password
+          POSTGRES_DB: tms_test_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U tms_test -d tms_test_ci"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      TMS_TEST_DB: Host=127.0.0.1;Port=5432;Database=tms_test_ci;Username=tms_test;Password=test-only-password
+      ConnectionStrings__TmsDatabase: Host=127.0.0.1;Port=5432;Database=tms_test_ci;Username=tms_test;Password=test-only-password
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      - run: dotnet restore TmsApi.sln
+      - run: dotnet build TmsApi.sln --no-restore
+      - run: dotnet tool install --global dotnet-ef --version 10.0.9
+      - run: dotnet ef database update --project TmsApi.Infrastructure --startup-project TmsApi.Api --no-build
+      - run: dotnet test TmsApi.sln --no-build --logger trx --results-directory TestResults
+      - run: python scripts/http-smoke.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results
+          path: |
+            TestResults/*.trx
+            TestResults/*.log
