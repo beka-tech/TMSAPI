@@ -37,373 +37,17 @@ using TmsApi.Infrastructure.Services;
 using TmsApi.Infrastructure.Transcripts;
 using TmsApi.Infrastructure.Workers;
 
-// ============================================================================
-// APPLICATION BUILDER
-// ============================================================================
-
 var builder = WebApplication.CreateBuilder(args);
 
-var npgsqlNameTranslator = new NpgsqlNullNameTranslator();
-
-// ============================================================================
-// DEPENDENCY INJECTION VALIDATION
-// ============================================================================
-
+// Validate dependency injection registrations.
 builder.Host.UseDefaultServiceProvider(options =>
 {
     options.ValidateScopes = true;
     options.ValidateOnBuild = true;
 });
 
-// ============================================================================
-// SIGNALR
-// ============================================================================
-
-builder.Services.AddSignalR();
-
-// ============================================================================
-// CQRS + MEDIATR
-// ============================================================================
-
-builder.Services.AddMediatR(cfg =>
-{
-    cfg.RegisterServicesFromAssembly(typeof(EnrollStudentHandler).Assembly);
-});
-
-builder.Services.AddValidatorsFromAssembly(typeof(EnrollStudentValidator).Assembly);
-
-builder.Services.AddTransient(typeof(IPipelineBehavior<,>), typeof(LoggingBehavior<,>));
-
-builder.Services.AddTransient(typeof(IPipelineBehavior<,>), typeof(ValidationBehavior<,>));
-
-// ============================================================================
-// GLOBAL EXCEPTION HANDLING + PROBLEM DETAILS
-// ============================================================================
-
-builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
-
-builder.Services.AddProblemDetails();
-
-// ============================================================================
-// CONTROLLERS
-// ============================================================================
-
-builder
-    .Services.AddControllers(options =>
-    {
-        options.Filters.Add<AuditLogFilter>();
-    })
-    .AddJsonOptions(options =>
-    {
-        options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
-    });
-
-// ============================================================================
-// ANTIFORGERY / XSRF
-// ============================================================================
-
-builder.Services.AddAntiforgery(options =>
-{
-    options.HeaderName = "X-XSRF-TOKEN";
-});
-
-// ============================================================================
-// RATE LIMITING
-// ============================================================================
-
-builder.Services.AddRateLimiter(options =>
-{
-    options.AddFixedWindowLimiter(
-        "AuthLimiter",
-        options =>
-        {
-            options.PermitLimit = 5;
-            options.Window = TimeSpan.FromMinutes(1);
-            options.QueueLimit = 0;
-        }
-    );
-
-    // ------------------------------------------------------------------------
-    // GLOBAL RATE LIMITER
-    // ------------------------------------------------------------------------
-
-    options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(httpContext =>
-    {
-        var (partitionKey, tier) = ApiKeyResolver.Resolve(httpContext);
-
-        return tier switch
-        {
-            ApiKeyTier.Paid => RateLimitPartition.GetTokenBucketLimiter(
-                partitionKey: $"paid:{partitionKey}",
-                factory: _ => new TokenBucketRateLimiterOptions
-                {
-                    TokenLimit = 200,
-                    TokensPerPeriod = 100,
-
-                    ReplenishmentPeriod = TimeSpan.FromSeconds(10),
-
-                    QueueLimit = 0,
-
-                    QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
-
-                    AutoReplenishment = true,
-                }
-            ),
-
-            ApiKeyTier.Free => RateLimitPartition.GetTokenBucketLimiter(
-                partitionKey: $"free:{partitionKey}",
-                factory: _ => new TokenBucketRateLimiterOptions
-                {
-                    TokenLimit = 30,
-                    TokensPerPeriod = 10,
-
-                    ReplenishmentPeriod = TimeSpan.FromSeconds(10),
-
-                    QueueLimit = 0,
-
-                    QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
-
-                    AutoReplenishment = true,
-                }
-            ),
-
-            _ => RateLimitPartition.GetTokenBucketLimiter(
-                partitionKey: $"anon:{partitionKey}",
-                factory: _ => new TokenBucketRateLimiterOptions
-                {
-                    TokenLimit = 10,
-                    TokensPerPeriod = 5,
-
-                    ReplenishmentPeriod = TimeSpan.FromSeconds(10),
-
-                    QueueLimit = 0,
-
-                    QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
-
-                    AutoReplenishment = true,
-                }
-            ),
-        };
-    });
-
-    // ------------------------------------------------------------------------
-    // TRANSCRIPT CONCURRENCY LIMITER
-    // ------------------------------------------------------------------------
-
-    options.AddConcurrencyLimiter(
-        policyName: "transcripts",
-        options =>
-        {
-            options.PermitLimit = 5;
-
-            options.QueueLimit = 20;
-
-            options.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
-        }
-    );
-
-    // ------------------------------------------------------------------------
-    // COURSE SEARCH RATE LIMITER
-    // ------------------------------------------------------------------------
-
-    options.AddTokenBucketLimiter(
-        policyName: "search",
-        options =>
-        {
-            options.TokenLimit = 10;
-
-            options.TokensPerPeriod = 5;
-
-            options.ReplenishmentPeriod = TimeSpan.FromSeconds(10);
-
-            options.QueueLimit = 2;
-
-            options.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
-
-            options.AutoReplenishment = true;
-        }
-    );
-
-    // ------------------------------------------------------------------------
-    // RATE LIMIT REJECTION RESPONSE
-    // ------------------------------------------------------------------------
-
-    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
-
-    options.OnRejected = (context, ct) => new ValueTask(WriteRateLimitResponseAsync(context, ct));
-});
-
-// ============================================================================
-// RATE LIMIT PROBLEM DETAILS RESPONSE
-// ============================================================================
-
-static async Task WriteRateLimitResponseAsync(
-    OnRejectedContext context,
-    CancellationToken cancellationToken
-)
-{
-    var retryAfter = "10";
-
-    if (context.Lease.TryGetMetadata(MetadataName.RetryAfter, out var timeSpan))
-    {
-        retryAfter = Math.Ceiling(timeSpan.TotalSeconds).ToString();
-    }
-
-    context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
-
-    context.HttpContext.Response.Headers["Retry-After"] = retryAfter;
-
-    context.HttpContext.Response.ContentType = "application/problem+json";
-
-    var problem = new ProblemDetails
-    {
-        Title = "Rate limit exceeded",
-
-        Detail = $"Too many requests. Retry after {retryAfter} seconds.",
-
-        Status = StatusCodes.Status429TooManyRequests,
-
-        Type = "https://tms.local/errors/rate_limit_exceeded",
-    };
-
-    await context.HttpContext.Response.WriteAsJsonAsync(
-        problem,
-        cancellationToken: cancellationToken
-    );
-}
-
-// ============================================================================
-// CORS
-// ============================================================================
-
-var allowedOrigins =
-    builder.Configuration.GetSection("AllowedOrigins").Get<string[]>() ?? ["http://localhost:4200"];
-
-builder.Services.AddCors(options =>
-{
-    options.AddPolicy(
-        "TmsClient",
-        policy =>
-        {
-            policy
-                .WithOrigins(allowedOrigins)
-                .AllowAnyHeader()
-                .AllowAnyMethod()
-                .AllowCredentials()
-                .SetPreflightMaxAge(TimeSpan.FromMinutes(10));
-        }
-    );
-});
-
-// ============================================================================
-// APPLICATION SERVICES
-// ============================================================================
-
-builder.Services.AddScoped<IEnrollmentService, EnrollmentService>();
-
-builder.Services.AddScoped<IStudentService, StudentService>();
-
-builder.Services.AddScoped<ICourseService, CourseService>();
-
-builder.Services.AddScoped<ICachedCourseService, CachedCourseService>();
-
-// ============================================================================
-// TRANSCRIPT STATUS STORE
-// ============================================================================
-
-builder.Services.AddSingleton<ITranscriptStatusStore, InMemoryTranscriptStatusStore>();
-
-// ============================================================================
-// TRANSCRIPT CHANNEL
-// ============================================================================
-
-builder.Services.AddSingleton(
-    Channel.CreateBounded<TranscriptRequest>(
-        new BoundedChannelOptions(100) { FullMode = BoundedChannelFullMode.Wait }
-    )
-);
-
-// ============================================================================
-// SIGNALR TRANSCRIPT NOTIFIER
-// ============================================================================
-
-builder.Services.AddSingleton<ITranscriptNotifier, SignalRTranscriptNotifier>();
-builder.Services.AddSingleton<IEnrollmentStatusNotifier, SignalREnrollmentStatusNotifier>();
-
-// ============================================================================
-// BACKGROUND WORKER
-// ============================================================================
-
-builder.Services.AddHostedService<TranscriptWorker>();
-
-// ============================================================================
-// OPENAPI
-// ============================================================================
-
-builder.Services.AddOpenApi(
-    "v1",
-    options =>
-    {
-        options.ShouldInclude = description => description.GroupName == "v1";
-    }
-);
-
-builder.Services.AddOpenApi(
-    "v2",
-    options =>
-    {
-        options.ShouldInclude = description => description.GroupName == "v2";
-    }
-);
-
-// ============================================================================
-// API VERSIONING
-// ============================================================================
-
-builder
-    .Services.AddApiVersioning(options =>
-    {
-        options.DefaultApiVersion = new ApiVersion(1, 0);
-
-        options.AssumeDefaultVersionWhenUnspecified = true;
-
-        options.ReportApiVersions = true;
-
-        options.ApiVersionReader = ApiVersionReader.Combine(
-            new UrlSegmentApiVersionReader(),
-            new HeaderApiVersionReader("X-Api-Version")
-        );
-    })
-    .AddApiExplorer(options =>
-    {
-        options.GroupNameFormat = "'v'VVV";
-
-        options.SubstituteApiVersionInUrl = true;
-    });
-
-// ============================================================================
-// HYBRID CACHE
-// ============================================================================
-
-builder.Services.AddHybridCache(options =>
-{
-    options.DefaultEntryOptions = new HybridCacheEntryOptions
-    {
-        Expiration = TimeSpan.FromMinutes(10),
-
-        LocalCacheExpiration = TimeSpan.FromMinutes(2),
-    };
-});
-
-// ============================================================================
-// HEALTH CHECKS
-// ============================================================================
-
-builder.Services.AddHealthChecks();
-
-// ============================================================================
-// DATABASE
-// ============================================================================
+// Database and caching.
+var npgsqlNameTranslator = new NpgsqlNullNameTranslator();
 
 builder.Services.AddDbContext<TmsDbContext>(options =>
 {
@@ -423,90 +67,29 @@ builder.Services.AddDbContext<TmsDbContext>(options =>
     }
 });
 
-// ============================================================================
-// ASP.NET CORE IDENTITY
-// ============================================================================
-//
-// TmsDbContext now inherits:
-//
-// IdentityDbContext<TmsUser>
-//
-// This registers:
-//
-// UserManager<TmsUser>
-// RoleManager<IdentityRole>
-// SignInManager<TmsUser>
-// PasswordHasher<TmsUser>
-// IUserStore<TmsUser>
-// IRoleStore<IdentityRole>
-//
-// and connects them to TmsDbContext.
-//
-
-builder
-    .Services.AddIdentity<TmsUser, IdentityRole>(options =>
+builder.Services.AddHybridCache(options =>
+{
+    options.DefaultEntryOptions = new HybridCacheEntryOptions
     {
-        // --------------------------------------------------------------------
-        // PASSWORD RULES
-        // --------------------------------------------------------------------
+        Expiration = TimeSpan.FromMinutes(10),
+        LocalCacheExpiration = TimeSpan.FromMinutes(2),
+    };
+});
 
-        options.Password.RequiredLength = 8;
+// Application services and validation.
+builder.Services.AddMediatR(cfg =>
+{
+    cfg.RegisterServicesFromAssembly(typeof(EnrollStudentHandler).Assembly);
+});
 
-        options.Password.RequireDigit = true;
+builder.Services.AddValidatorsFromAssembly(typeof(EnrollStudentValidator).Assembly);
+builder.Services.AddTransient(typeof(IPipelineBehavior<,>), typeof(LoggingBehavior<,>));
+builder.Services.AddTransient(typeof(IPipelineBehavior<,>), typeof(ValidationBehavior<,>));
 
-        options.Password.RequireLowercase = true;
-
-        options.Password.RequireUppercase = true;
-
-        options.Password.RequireNonAlphanumeric = false;
-
-        // --------------------------------------------------------------------
-        // USER RULES
-        // --------------------------------------------------------------------
-
-        options.User.RequireUniqueEmail = true;
-
-        // --------------------------------------------------------------------
-        // LOCKOUT
-        // --------------------------------------------------------------------
-
-        options.Lockout.AllowedForNewUsers = true;
-
-        options.Lockout.MaxFailedAccessAttempts = 5;
-
-        options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(5);
-    })
-    .AddEntityFrameworkStores<TmsDbContext>()
-    .AddDefaultTokenProviders();
-
-// ============================================================================
-// AUTHORIZATION
-// ============================================================================
-//
-// AddIdentity() already registers Identity authentication/cookie schemes.
-//
-// We still explicitly register authorization because we use:
-//
-// app.UseAuthorization()
-//
-// and potentially:
-//
-// [Authorize]
-//
-
-builder.Services.AddAuthorization();
-
-// ============================================================================
-// OPTIONS
-// ============================================================================
-
-builder
-    .Services.AddAuthorizationBuilder()
-    .AddPolicy(
-        "CanEditCourse",
-        policy => policy.Requirements.Add(new CourseInstructorRequirement())
-    );
-builder.Services.AddSingleton<IAuthorizationHandler, CourseInstructorHandler>();
+builder.Services.AddScoped<IEnrollmentService, EnrollmentService>();
+builder.Services.AddScoped<IStudentService, StudentService>();
+builder.Services.AddScoped<ICourseService, CourseService>();
+builder.Services.AddScoped<ICachedCourseService, CachedCourseService>();
 
 builder
     .Services.AddOptions<PaymentOptions>()
@@ -514,7 +97,46 @@ builder
     .ValidateDataAnnotations()
     .ValidateOnStart();
 
+// Transcripts and real-time notifications.
+builder.Services.AddSignalR();
+
+builder.Services.AddSingleton<ITranscriptStatusStore, InMemoryTranscriptStatusStore>();
+
+builder.Services.AddSingleton(
+    Channel.CreateBounded<TranscriptRequest>(
+        new BoundedChannelOptions(100) { FullMode = BoundedChannelFullMode.Wait }
+    )
+);
+
+builder.Services.AddSingleton<ITranscriptNotifier, SignalRTranscriptNotifier>();
+builder.Services.AddSingleton<IEnrollmentStatusNotifier, SignalREnrollmentStatusNotifier>();
+
+builder.Services.AddHostedService<TranscriptWorker>();
+
+// Authentication and authorization.
+builder
+    .Services.AddIdentity<TmsUser, IdentityRole>(options =>
+    {
+        // Password requirements.
+        options.Password.RequiredLength = 8;
+        options.Password.RequireDigit = true;
+        options.Password.RequireLowercase = true;
+        options.Password.RequireUppercase = true;
+        options.Password.RequireNonAlphanumeric = false;
+
+        // User requirements.
+        options.User.RequireUniqueEmail = true;
+
+        // Lockout.
+        options.Lockout.AllowedForNewUsers = true;
+        options.Lockout.MaxFailedAccessAttempts = 5;
+        options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(5);
+    })
+    .AddEntityFrameworkStores<TmsDbContext>()
+    .AddDefaultTokenProviders();
+
 builder.Services.AddScoped<TokenService>();
+
 builder
     .Services.AddAuthentication(options =>
     {
@@ -545,28 +167,162 @@ builder
     );
 builder.Services.AddSingleton<IAuthorizationHandler, CourseInstructorHandler>();
 
-// ============================================================================
-// BUILD APPLICATION
-// ============================================================================
+// Controllers, error responses, and API documentation.
+builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
+builder.Services.AddProblemDetails();
 
+builder
+    .Services.AddControllers(options =>
+    {
+        options.Filters.Add<AuditLogFilter>();
+    })
+    .AddJsonOptions(options =>
+    {
+        options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
+    });
+
+builder
+    .Services.AddApiVersioning(options =>
+    {
+        options.DefaultApiVersion = new ApiVersion(1, 0);
+        options.AssumeDefaultVersionWhenUnspecified = true;
+        options.ReportApiVersions = true;
+        options.ApiVersionReader = ApiVersionReader.Combine(
+            new UrlSegmentApiVersionReader(),
+            new HeaderApiVersionReader("X-Api-Version")
+        );
+    })
+    .AddApiExplorer(options =>
+    {
+        options.GroupNameFormat = "'v'VVV";
+        options.SubstituteApiVersionInUrl = true;
+    });
+
+builder.Services.AddOpenApi(
+    "v1",
+    options =>
+    {
+        options.ShouldInclude = description => description.GroupName == "v1";
+    }
+);
+
+builder.Services.AddOpenApi(
+    "v2",
+    options =>
+    {
+        options.ShouldInclude = description => description.GroupName == "v2";
+    }
+);
+
+builder.Services.AddHealthChecks();
+
+// Antiforgery and CORS.
+builder.Services.AddAntiforgery(options =>
+{
+    options.HeaderName = "X-XSRF-TOKEN";
+});
+
+var allowedOrigins =
+    builder.Configuration.GetSection("AllowedOrigins").Get<string[]>() ?? ["http://localhost:4200"];
+
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy(
+        "TmsClient",
+        policy =>
+        {
+            policy
+                .WithOrigins(allowedOrigins)
+                .AllowAnyHeader()
+                .AllowAnyMethod()
+                .AllowCredentials()
+                .SetPreflightMaxAge(TimeSpan.FromMinutes(10));
+        }
+    );
+});
+
+// Rate limiting.
+builder.Services.AddRateLimiter(options =>
+{
+    options.AddFixedWindowLimiter(
+        "AuthLimiter",
+        options =>
+        {
+            options.PermitLimit = 5;
+            options.Window = TimeSpan.FromMinutes(1);
+            options.QueueLimit = 0;
+        }
+    );
+
+    // Global limits by API key tier.
+    options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(httpContext =>
+    {
+        var (partitionKey, tier) = ApiKeyResolver.Resolve(httpContext);
+
+        return tier switch
+        {
+            ApiKeyTier.Paid => RateLimitPartition.GetTokenBucketLimiter(
+                partitionKey: $"paid:{partitionKey}",
+                factory: _ => new TokenBucketRateLimiterOptions
+                {
+                    TokenLimit = 200,
+                    TokensPerPeriod = 100,
+                    ReplenishmentPeriod = TimeSpan.FromSeconds(10),
+                    QueueLimit = 0,
+                    QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                    AutoReplenishment = true,
+                }
+            ),
+            ApiKeyTier.Free => RateLimitPartition.GetTokenBucketLimiter(
+                partitionKey: $"free:{partitionKey}",
+                factory: _ => new TokenBucketRateLimiterOptions
+                {
+                    TokenLimit = 30,
+                    TokensPerPeriod = 10,
+                    ReplenishmentPeriod = TimeSpan.FromSeconds(10),
+                    QueueLimit = 0,
+                    QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                    AutoReplenishment = true,
+                }
+            ),
+            _ => RateLimitPartition.GetTokenBucketLimiter(
+                partitionKey: $"anon:{partitionKey}",
+                factory: _ => new TokenBucketRateLimiterOptions
+                {
+                    TokenLimit = 10,
+                    TokensPerPeriod = 5,
+                    ReplenishmentPeriod = TimeSpan.FromSeconds(10),
+                    QueueLimit = 0,
+                    QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                    AutoReplenishment = true,
+                }
+            ),
+        };
+    });
+
+    // Transcript concurrency.
+    options.AddConcurrencyLimiter(
+        policyName: "transcripts",
+        options =>
+        {
+            options.PermitLimit = 5;
+            options.QueueLimit = 20;
+            options.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
+        }
+    );
+
+    // Rejection response.
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.OnRejected = (context, ct) => new ValueTask(WriteRateLimitResponseAsync(context, ct));
+});
+
+// Request pipeline. Middleware order is significant.
 var app = builder.Build();
 
-// ============================================================================
-// ERROR HANDLING
-// ============================================================================
-
 app.UseExceptionHandler();
-
-// ============================================================================
-// STATUS CODE → PROBLEM DETAILS
-// ============================================================================
-
 app.UseStatusCodePages();
 
-// ============================================================================
-// SECURITY RESPONSE HEADERS
-// ============================================================================
-
+// Security response headers.
 app.Use(
     async (context, next) =>
     {
@@ -585,52 +341,14 @@ app.Use(
     }
 );
 
-// ============================================================================
-// CUSTOM REQUEST LOGGING
-// ============================================================================
-
 app.UseMiddleware<RequestLoggingMiddleware>();
-
-// ============================================================================
-// ROUTING
-// ============================================================================
-
 app.UseRouting();
-
-// ============================================================================
-// CORS
-// ============================================================================
-//
-// Must run after routing and before authentication.
-//
-
 app.UseCors("TmsClient");
-
-// ============================================================================
-// RATE LIMITING
-// ============================================================================
-
 app.UseRateLimiter();
-
-// ============================================================================
-// AUTHENTICATION
-// ============================================================================
-//
-// Identity authentication must come before authorization.
-//
-
 app.UseAuthentication();
-
-// ============================================================================
-// AUTHORIZATION
-// ============================================================================
-
 app.UseAuthorization();
 
-// ============================================================================
-// XSRF TOKEN COOKIE
-// ============================================================================
-
+// Issue the XSRF token cookie for authenticated clients.
 app.Use(
     async (context, next) =>
     {
@@ -640,7 +358,6 @@ app.Use(
         )
         {
             var antiforgery = context.RequestServices.GetRequiredService<IAntiforgery>();
-
             var tokens = antiforgery.GetAndStoreTokens(context);
 
             if (tokens.RequestToken is not null)
@@ -650,13 +367,11 @@ app.Use(
                     tokens.RequestToken,
                     new CookieOptions
                     {
-                        // Angular JavaScript must
-                        // be able to read this token.
+                        // Angular must be able to read this token.
                         HttpOnly = false,
 
                         // HTTP is currently used in development.
                         Secure = !app.Environment.IsDevelopment(),
-
                         SameSite = SameSiteMode.Strict,
                     }
                 );
@@ -667,16 +382,9 @@ app.Use(
     }
 );
 
-// ============================================================================
-// CUSTOM API VERSION DEPRECATION MIDDLEWARE
-// ============================================================================
-
 app.UseMiddleware<V1DeprecationMiddleware>();
 
-// ============================================================================
-// DEVELOPMENT OPENAPI + SCALAR
-// ============================================================================
-
+// Endpoints.
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
@@ -692,38 +400,40 @@ if (app.Environment.IsDevelopment())
     });
 }
 
-// ============================================================================
-// HEALTH CHECK ENDPOINTS
-// ============================================================================
-
 app.MapHealthChecks("/health/live").DisableRateLimiting();
-
 app.MapHealthChecks("/health/ready").DisableRateLimiting();
-
-// ============================================================================
-// SIGNALR HUB
-// ============================================================================
-//
-// Angular:
-//
-// new HubConnectionBuilder()
-//     .withUrl("/hubs/tms")
-//
-// Angular proxy:
-//
-// /hubs/** -> http://localhost:5150
-//
-
 app.MapHub<TmsHub>("/hubs/tms");
-
-// ============================================================================
-// CONTROLLERS
-// ============================================================================
-
 app.MapControllers();
 
-// ============================================================================
-// RUN APPLICATION
-// ============================================================================
-
 app.Run();
+
+// Format rate-limit rejections as problem details.
+static async Task WriteRateLimitResponseAsync(
+    OnRejectedContext context,
+    CancellationToken cancellationToken
+)
+{
+    var retryAfter = "10";
+
+    if (context.Lease.TryGetMetadata(MetadataName.RetryAfter, out var timeSpan))
+    {
+        retryAfter = Math.Ceiling(timeSpan.TotalSeconds).ToString();
+    }
+
+    context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
+    context.HttpContext.Response.Headers["Retry-After"] = retryAfter;
+    context.HttpContext.Response.ContentType = "application/problem+json";
+
+    var problem = new ProblemDetails
+    {
+        Title = "Rate limit exceeded",
+        Detail = $"Too many requests. Retry after {retryAfter} seconds.",
+        Status = StatusCodes.Status429TooManyRequests,
+        Type = "https://tms.local/errors/rate_limit_exceeded",
+    };
+
+    await context.HttpContext.Response.WriteAsJsonAsync(
+        problem,
+        cancellationToken: cancellationToken
+    );
+}
